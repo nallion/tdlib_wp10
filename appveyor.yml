@@ -37,11 +37,14 @@ before_build:
 
 build_script:
   - cd %PROJECT_DIR%\build
-  # Собираем напрямую, используя относительный путь от корня сборки
-  - msbuild example\uwp\tdni.vcxproj /p:Configuration=Release /p:Platform=ARM /m /p:AppxPackage=false
+  # Динамический поиск файла проекта
+  - for /f "delims=" %%i in ('dir /b /s tdni.vcxproj') do set "V_PROJ=%%i"
+  - if not defined V_PROJ (echo "ERROR: tdni.vcxproj not found" && exit 1)
+  - echo Building: %V_PROJ%
+  - msbuild "%V_PROJ%" /p:Configuration=Release /p:Platform=ARM /m /p:AppxPackage=false
 
 artifacts:
-  # Используем рекурсивный поиск артефактов, так как пути могут отличаться
+  # Рекурсивный поиск артефактов гарантирует их сбор из любой папки
   - path: "**\tdni.dll"
     name: tdni_dll
   - path: "**\tdni.winmd"
