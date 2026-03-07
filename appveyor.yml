@@ -9,23 +9,17 @@ environment:
   PROJECT_DIR: c:\projects\td
 
 install:
-  # 1. Клонирование
   - mkdir %PROJECT_DIR%
   - git clone https://github.com/tdlib/td.git %PROJECT_DIR%
   - cd %PROJECT_DIR%
   - git submodule update --init --recursive
-
-  # 2. Инструментарий
   - choco install gperf -y
   - choco install strawberryperl -y
   - choco install php -y
   - set PATH=C:\Strawberry\perl\bin;C:\tools\php83;%PATH%
-
-  # 3. Зависимости через "родной" vcpkg образа VS2017
   - cd C:\tools\vcpkg
   - .\bootstrap-vcpkg.bat
   - vcpkg install zlib:%VCPKG_TARGET_TRIPLET% openssl:%VCPKG_TARGET_TRIPLET% --clean-after-build
-  
   - cd %PROJECT_DIR%
 
 before_build:
@@ -42,16 +36,15 @@ before_build:
     ..
 
 build_script:
-  # Переходим в папку, где CMake создал файлы проекта для UWP примера
-  - cd %PROJECT_DIR%\build\example\uwp
-  # Собираем напрямую проект WinRT компонента
-  - msbuild tdni.vcxproj /p:Configuration=Release /p:Platform=ARM /m /p:AppxPackage=false
+  - cd %PROJECT_DIR%\build
+  # Собираем напрямую, используя относительный путь от корня сборки
+  - msbuild example\uwp\tdni.vcxproj /p:Configuration=Release /p:Platform=ARM /m /p:AppxPackage=false
 
 artifacts:
-  # Поиск файлов в папке сборки примера
-  - path: build\example\uwp\Release\tdni.dll
+  # Используем рекурсивный поиск артефактов, так как пути могут отличаться
+  - path: "**\tdni.dll"
     name: tdni_dll
-  - path: build\example\uwp\Release\tdni.winmd
+  - path: "**\tdni.winmd"
     name: tdni_metadata
 
 test: off
