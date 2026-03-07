@@ -1,34 +1,21 @@
-# ═══════════════════════════════════════════════════════════════════
-#  AppVeyor CI — сборка TDLib JSON для Windows Phone 10 (UWP ARM)
-#
-#  ФИКС: error: vcpkg was unable to detect the active compiler
-#  ПРИЧИНА: на appveyor image "Visual Studio 2022" не установлен
-#           компонент "C++ Universal Windows Platform tools" (ARM)
-#  РЕШЕНИЕ: явно устанавливаем нужные VS компоненты перед vcpkg
-# ═══════════════════════════════════════════════════════════════════
+# Build TDLib JSON for Windows Phone 10 (UWP ARM)
+# Fix: vcpkg unable to detect compiler (arm-uwp)
+# Solution: custom triplet files with explicit VS path + platform toolset
 
 version: 1.0.{build}
-
-# Visual Studio 2022 — базовый образ
 image: Visual Studio 2022
-
-# Отключить стандартную сборку
 build: off
 test: off
-
 configuration: Release
 
 environment:
-  # Конкретный коммит vcpkg — НЕЛЬЗЯ менять на новее!
   VCPKG_COMMIT: bc3512a509f9d29b37346a7e7e929f9a26e66c7e
   VCPKG_ROOT: C:\vcpkg
   TDLIB_DIR: C:\tdlib
+  TRIPLETS_DIR: C:\vcpkg-triplets
   CL: /MP
   APPVEYOR_SAVE_CACHE_ON_ERROR: true
 
-# ───────────────────────────────────────────────────────────────────
-# Кэш — повторные сборки ~20-30 мин вместо 3-4 часов
-# ───────────────────────────────────────────────────────────────────
 cache:
   - C:\vcpkg\installed -> appveyor.yml
   - C:\vcpkg\packages  -> appveyor.yml
@@ -36,93 +23,109 @@ cache:
 
 install:
 
-  # ── ШАГ 1: Установить ARM + UWP компоненты Visual Studio ──────────
-  # КОРЕНЬ ОШИБКИ: vcpkg не находит ARM toolchain потому что на
-  # стандартном appveyor-образе НЕТ этих компонентов VS:
-  #   - C++ ARM build tools             (для arm-uwp triplet)
-  #   - C++ ARM64 build tools           (для arm64-uwp triplet)
-  #   - C++ Universal Windows Platform  (для всех uwp triplet'ов)
-  #   - Windows 10 SDK 19041            (заголовки UWP ARM)
+  # STEP 1: Find VS2022 and persist path for all steps
   - ps: |
-      Write-Host "=== Installing VS2022 ARM + UWP components ===" -ForegroundColor Cyan
-
-      $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
-
-      # Найти установленный экземпляр VS 2022
+      Write-Host "=== Finding Visual Studio 2022 ===" -ForegroundColor Cyan
       $vsPath = @(
         "C:\Program Files\Microsoft Visual Studio\2022\Enterprise",
         "C:\Program Files\Microsoft Visual Studio\2022\Community",
         "C:\Program Files\Microsoft Visual Studio\2022\Professional"
       ) | Where-Object { Test-Path "$_\VC\Auxiliary\Build\vcvarsall.bat" } | Select-Object -First 1
+      if (-not $vsPath) { Write-Error "VS 2022 not found!"; exit 1 }
+      Write-Host "VS path: $vsPath" -ForegroundColor Green
+      $vcvarsall = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
+      [Environment]::SetEnvironmentVariable("VS2022_PATH",              $vsPath,   "Machine")
+      [Environment]::SetEnvironmentVariable("VCPKG_VISUAL_STUDIO_PATH", $vsPath,   "Machine")
+      [Environment]::SetEnvironmentVariable("VCVARSALL_PATH",           $vcvarsall,"Machine")
+      [Environment]::SetEnvironmentVariable("VS2022_PATH",              $vsPath,   "Process")
+      [Environment]::SetEnvironmentVariable("VCPKG_VISUAL_STUDIO_PATH", $vsPath,   "Process")
+      [Environment]::SetEnvironmentVariable("VCVARSALL_PATH",           $vcvarsall,"Process")
 
-      if (-not $vsPath) { Write-Error "VS 2022 не найден!"; exit 1 }
-      Write-Host "VS path: $vsPath" -ForegroundColor Gray
-
-      # Компоненты необходимые для arm-uwp и arm64-uwp
-      $components = @(
+  # STEP 2: Install missing ARM + UWP components in VS
+  - ps: |
+      Write-Host "=== Installing VS2022 ARM + UWP components ===" -ForegroundColor Cyan
+      $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+      $vsPath      = [Environment]::GetEnvironmentVariable("VS2022_PATH","Machine")
+      $components  = @(
         "Microsoft.VisualStudio.Component.VC.Tools.ARM",
         "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
         "Microsoft.VisualStudio.ComponentGroup.UWP.VC",
         "Microsoft.VisualStudio.Component.Windows10SDK.19041",
         "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
       )
-
       $addArgs = $components | ForEach-Object { "--add", $_ }
-
-      $proc = Start-Process -FilePath $vsInstaller -Wait -PassThru -ArgumentList (@(
-        "modify",
-        "--installPath", $vsPath,
-        "--quiet", "--norestart", "--noUpdateInstaller"
-      ) + $addArgs)
-
-      # 0 = успешно, 3010 = нужна перезагрузка (в CI норма)
+      $proc = Start-Process -FilePath $vsInstaller -Wait -PassThru -ArgumentList (
+        @("modify","--installPath",$vsPath,"--quiet","--norestart","--noUpdateInstaller") + $addArgs
+      )
       if ($proc.ExitCode -notin @(0, 3010)) {
-        Write-Warning "vs_installer вернул $($proc.ExitCode) — компоненты возможно уже установлены"
+        Write-Warning "vs_installer returned $($proc.ExitCode)"
       } else {
-        Write-Host "VS компоненты установлены (exit: $($proc.ExitCode))" -ForegroundColor Green
+        Write-Host "VS components OK (exit: $($proc.ExitCode))" -ForegroundColor Green
       }
 
-      # Сохраняем путь к vcvarsall для следующих шагов
-      $vcvarsall = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
-      [Environment]::SetEnvironmentVariable("VCVARSALL_PATH", $vcvarsall, "Process")
-      [Environment]::SetEnvironmentVariable("VCPKG_VISUAL_STUDIO_PATH", $vsPath, "Machine")
-      [Environment]::SetEnvironmentVariable("VCPKG_VISUAL_STUDIO_PATH", $vsPath, "Process")
-      Write-Host "VCPKG_VISUAL_STUDIO_PATH = $vsPath" -ForegroundColor Green
-
-  # ── ШАГ 2: Проверить ARM cl.exe ───────────────────────────────────
+  # STEP 3: Verify ARM cl.exe
   - ps: |
       Write-Host "=== Verifying ARM toolchain ===" -ForegroundColor Cyan
-      $vsPath = $env:VCPKG_VISUAL_STUDIO_PATH
-      $armCl  = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -ErrorAction SilentlyContinue |
+      $vsPath = [Environment]::GetEnvironmentVariable("VS2022_PATH","Machine")
+      $armCl  = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
                 Where-Object { $_.FullName -like "*\arm\cl.exe" } | Select-Object -First 1
-
       if ($armCl) {
         Write-Host "ARM cl.exe: $($armCl.FullName)" -ForegroundColor Green
       } else {
-        Write-Warning "ARM cl.exe не найден — ARM компонент не установился"
-        Write-Host "Доступные варианты cl.exe:" -ForegroundColor Yellow
-        Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -ErrorAction SilentlyContinue |
+        Write-Warning "ARM cl.exe NOT found. Available cl.exe files:"
+        Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
           ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
       }
 
-  # ── ШАГ 3: Клонировать TDLib ──────────────────────────────────────
+  # STEP 4: Create custom triplet files with explicit VS path
+  # Key fix: vcpkg reads VCPKG_VISUAL_STUDIO_PATH from triplet file directly,
+  # so it cannot accidentally pick a different VS instance
+  - ps: |
+      Write-Host "=== Creating custom UWP triplets ===" -ForegroundColor Cyan
+      $tripDir = $env:TRIPLETS_DIR
+      $vsPath  = [Environment]::GetEnvironmentVariable("VS2022_PATH","Machine")
+      New-Item -ItemType Directory -Force -Path $tripDir | Out-Null
+      $triplets = @{ "arm-uwp"="ARM"; "arm64-uwp"="ARM64"; "x86-uwp"="x86"; "x64-uwp"="x64" }
+      foreach ($t in $triplets.GetEnumerator()) {
+        $lines = @(
+          "set(VCPKG_TARGET_ARCHITECTURE $($t.Value))",
+          "set(VCPKG_CRT_LINKAGE dynamic)",
+          "set(VCPKG_LIBRARY_LINKAGE dynamic)",
+          "set(VCPKG_CMAKE_SYSTEM_NAME WindowsStore)",
+          "set(VCPKG_CMAKE_SYSTEM_VERSION 10.0)",
+          "set(VCPKG_PLATFORM_TOOLSET v143)",
+          "set(VCPKG_VISUAL_STUDIO_PATH `"$vsPath`")"
+        )
+        $outPath = "$tripDir\$($t.Key).cmake"
+        [IO.File]::WriteAllLines($outPath, $lines, [Text.Encoding]::ASCII)
+        Write-Host "  $outPath" -ForegroundColor Green
+      }
+      Get-ChildItem $tripDir | ForEach-Object {
+        Write-Host "--- $($_.Name) ---" -ForegroundColor Yellow
+        Get-Content $_.FullName | ForEach-Object { Write-Host "  $_" }
+      }
+
+  # STEP 5: Clone TDLib
   - ps: |
       Write-Host "=== Cloning TDLib ===" -ForegroundColor Cyan
       if (-not (Test-Path $env:TDLIB_DIR)) {
-        git clone --depth 1 https://github.com/tdlib/td.git $env:TDLIB_DIR
+        $out = cmd /c "git clone --depth 1 https://github.com/tdlib/td.git $env:TDLIB_DIR 2>&1"
+        Write-Host ($out -join "`n") -ForegroundColor Gray
       } else {
-        Write-Host "TDLib уже есть (кэш)" -ForegroundColor Yellow
-        Push-Location $env:TDLIB_DIR; git pull --ff-only; Pop-Location
+        Write-Host "TDLib already cloned (cache)" -ForegroundColor Yellow
+        Push-Location $env:TDLIB_DIR
+        cmd /c "git pull --ff-only 2>&1"
+        Pop-Location
       }
       Push-Location $env:TDLIB_DIR
       Write-Host "Commit: $(git log --oneline -1)" -ForegroundColor Green
       Pop-Location
 
-  # ── ШАГ 4: Клонировать vcpkg (зафиксированный коммит) ────────────
+  # STEP 6: Clone vcpkg at pinned commit (MUST NOT change)
   - ps: |
       Write-Host "=== Setting up vcpkg ($env:VCPKG_COMMIT) ===" -ForegroundColor Cyan
       if (-not (Test-Path "$env:VCPKG_ROOT\vcpkg.exe")) {
-        git clone https://github.com/Microsoft/vcpkg.git $env:VCPKG_ROOT
+        cmd /c "git clone https://github.com/Microsoft/vcpkg.git $env:VCPKG_ROOT 2>&1"
         Push-Location $env:VCPKG_ROOT
         git checkout $env:VCPKG_COMMIT
         .\bootstrap-vcpkg.bat -disableMetrics
@@ -134,61 +137,54 @@ install:
           git checkout $env:VCPKG_COMMIT
           .\bootstrap-vcpkg.bat -disableMetrics
         } else {
-          Write-Host "vcpkg на нужном коммите" -ForegroundColor Green
+          Write-Host "vcpkg at correct commit" -ForegroundColor Green
         }
         Pop-Location
       }
 
-  # ── ШАГ 5: Установить зависимости vcpkg ───────────────────────────
-  # ВАЖНО: запускаем через cmd с vcvarsall чтобы vcpkg видел ARM cl.exe
+  # STEP 7: Install vcpkg packages using custom triplets
   - ps: |
-      Write-Host "=== Installing vcpkg dependencies ===" -ForegroundColor Cyan
-
-      $allPkgs = @(
+      Write-Host "=== Installing vcpkg packages ===" -ForegroundColor Cyan
+      $allPkgs   = @(
         "gperf:x86-windows",
-        "openssl:arm-uwp", "openssl:arm64-uwp", "openssl:x64-uwp", "openssl:x86-uwp",
-        "zlib:arm-uwp",    "zlib:arm64-uwp",    "zlib:x64-uwp",    "zlib:x86-uwp"
+        "openssl:arm-uwp","openssl:arm64-uwp","openssl:x64-uwp","openssl:x86-uwp",
+        "zlib:arm-uwp","zlib:arm64-uwp","zlib:x64-uwp","zlib:x86-uwp"
       )
-
-      # Фильтруем уже установленные (из кэша)
-      $installed = & "$env:VCPKG_ROOT\vcpkg.exe" list 2>$null | Out-String
+      $installed = (cmd /c "$env:VCPKG_ROOT\vcpkg.exe list 2>&1") -join "`n"
       $toInstall = $allPkgs | Where-Object {
-        $name    = ($_ -split ":")[0]
-        $triplet = ($_ -split ":")[1]
-        -not ($installed -match "$name\s.*$triplet")
+        $n = ($_ -split ":")[0]; $tr = ($_ -split ":")[1]
+        -not ($installed -match "$n\s.*$tr")
       }
-
       if ($toInstall.Count -eq 0) {
-        Write-Host "Все пакеты уже установлены (из кэша)" -ForegroundColor Green
+        Write-Host "All packages already installed (cache)" -ForegroundColor Green
       } else {
-        Write-Host "Устанавливаем: $($toInstall -join ', ')" -ForegroundColor Yellow
-
-        # Запускаем vcpkg через Developer Command Prompt (vcvarsall x86)
-        # Это обеспечивает доступ ARM cl.exe через PATH vcvarsall
-        $pkgList  = $toInstall -join " "
-        $vcpkgExe = "$env:VCPKG_ROOT\vcpkg.exe"
-        $tmpCmd   = [IO.Path]::GetTempFileName() + ".cmd"
-
-        $lines = @(
-          "call `"$env:VCVARSALL_PATH`" x86",
+        Write-Host "Installing: $($toInstall -join ', ')" -ForegroundColor Yellow
+        $pkgArgs = ($toInstall -join " ") + " --overlay-triplets=$env:TRIPLETS_DIR --disable-metrics"
+        $vcvarsall = [Environment]::GetEnvironmentVariable("VCVARSALL_PATH","Machine")
+        $tmpCmd    = [IO.Path]::GetTempFileName() + ".cmd"
+        $lines     = @(
+          "call `"$vcvarsall`" x86",
           "if %errorlevel% neq 0 exit /b %errorlevel%",
-          "`"$vcpkgExe`" install $pkgList --disable-metrics",
+          "`"$env:VCPKG_ROOT\vcpkg.exe`" install $pkgArgs",
           "exit /b %errorlevel%"
         )
         [IO.File]::WriteAllLines($tmpCmd, $lines, [Text.Encoding]::ASCII)
-
         cmd /c $tmpCmd
         $exitCode = $LASTEXITCODE
-        Remove-Item $tmpCmd -ErrorAction SilentlyContinue
-
+        Remove-Item $tmpCmd -EA SilentlyContinue
         if ($exitCode -ne 0) {
-          Write-Error "vcpkg install failed (exit: $exitCode)"
-          exit $exitCode
+          Write-Host "=== detect_compiler logs ===" -ForegroundColor Red
+          Get-ChildItem "C:\vcpkg\buildtrees\detect_compiler" -Filter "*.log" -EA SilentlyContinue |
+            ForEach-Object {
+              Write-Host "--- $($_.Name) ---" -ForegroundColor Yellow
+              Get-Content $_.FullName -EA SilentlyContinue | Select-Object -Last 60
+            }
+          Write-Error "vcpkg install failed (exit: $exitCode)"; exit $exitCode
         }
-        Write-Host "vcpkg packages installed OK" -ForegroundColor Green
+        Write-Host "vcpkg packages OK" -ForegroundColor Green
       }
 
-  # ── ШАГ 6: 7-Zip ──────────────────────────────────────────────────
+  # STEP 8: Install 7-Zip
   - ps: |
       if (-not (Test-Path "C:\Program Files\7-Zip\7z.exe")) {
         choco install 7zip --no-progress -y
@@ -196,7 +192,7 @@ install:
       $env:PATH = "C:\Program Files\7-Zip;$env:PATH"
       Write-Host "7-Zip OK" -ForegroundColor Green
 
-  # ── ШАГ 7: PHP ────────────────────────────────────────────────────
+  # STEP 9: Install PHP
   - ps: |
       if (-not (Get-Command php -ErrorAction SilentlyContinue)) {
         choco install php --no-progress -y
@@ -204,61 +200,63 @@ install:
       }
       Write-Host "PHP: $(php --version 2>&1 | Select-Object -First 1)" -ForegroundColor Green
 
-  # ── ШАГ 8: gperf в PATH ───────────────────────────────────────────
+  # STEP 10: Add gperf to PATH
   - ps: |
       $gperfDir = "C:\vcpkg\installed\x86-windows\tools\gperf"
       if (Test-Path $gperfDir) {
         $env:PATH = "$gperfDir;$env:PATH"
         Write-Host "gperf OK" -ForegroundColor Green
       } else {
-        Write-Warning "gperf не найден в $gperfDir"
+        Write-Warning "gperf not found at $gperfDir"
       }
 
-  # ── ШАГ 9: Итоговая проверка ──────────────────────────────────────
+  # STEP 11: Pre-build summary
   - ps: |
-      Write-Host "`n=== Pre-build tool summary ===" -ForegroundColor Cyan
+      Write-Host "=== Pre-build summary ===" -ForegroundColor Cyan
       cmake --version | Select-Object -First 1
       gperf --version 2>&1 | Select-Object -First 1
       php --version 2>&1 | Select-Object -First 1
-      & "C:\Program Files\7-Zip\7z.exe" i 2>&1 | Select-Object -First 1
-      Write-Host "VCPKG_VISUAL_STUDIO_PATH = $env:VCPKG_VISUAL_STUDIO_PATH"
-      & "$env:VCPKG_ROOT\vcpkg.exe" list
+      Write-Host "VS2022:   $([Environment]::GetEnvironmentVariable('VS2022_PATH','Machine'))"
+      Write-Host "TRIPLETS: $env:TRIPLETS_DIR"
+      cmd /c "$env:VCPKG_ROOT\vcpkg.exe list 2>&1"
 
-# ───────────────────────────────────────────────────────────────────
-# ОСНОВНАЯ СБОРКА — build.ps1 делает 6-8 конфигураций внутри
-# ───────────────────────────────────────────────────────────────────
 build_script:
   - ps: |
-      Write-Host "=== TDLib UWP build start: $(Get-Date -Format 'HH:mm:ss') ===" -ForegroundColor Cyan
+      Write-Host "=== TDLib UWP build: $(Get-Date -Format 'HH:mm:ss') ===" -ForegroundColor Cyan
       Set-Location "$env:TDLIB_DIR\example\uwp"
-
       $cached = (Test-Path "build-uwp\vsix\tdlib.vsix") -and
                 (@(Get-ChildItem "build-uwp\nupkg\*.nupkg" -EA SilentlyContinue).Count -gt 0)
-
       if ($cached) {
-        Write-Host "Артефакты в кэше — сборка не нужна" -ForegroundColor Green
+        Write-Host "Artifacts in cache - skipping build" -ForegroundColor Green
       } else {
+        $env:VCPKG_OVERLAY_TRIPLETS = $env:TRIPLETS_DIR
         powershell -ExecutionPolicy ByPass .\build.ps1 -vcpkg_root $env:VCPKG_ROOT -nupkg
-        if ($LASTEXITCODE -ne 0) { Write-Error "build.ps1 failed!"; exit $LASTEXITCODE }
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "build.ps1 failed ($LASTEXITCODE)"; exit $LASTEXITCODE
+        }
       }
       Write-Host "=== Done: $(Get-Date -Format 'HH:mm:ss') ===" -ForegroundColor Green
 
-# ───────────────────────────────────────────────────────────────────
-# РЕЗУЛЬТАТЫ
-# ───────────────────────────────────────────────────────────────────
 after_build:
   - ps: |
       $buildDir = "$env:TDLIB_DIR\example\uwp\build-uwp"
-      Write-Host "`n=== tdjson.dll files ===" -ForegroundColor Cyan
+      Write-Host "=== tdjson.dll results ===" -ForegroundColor Cyan
       Get-ChildItem $buildDir -Recurse -Filter "tdjson.dll" -EA SilentlyContinue |
         ForEach-Object {
           $rel = $_.FullName.Replace($buildDir,"").TrimStart("\")
           Write-Host ("  {0,-55} {1,5} MB" -f $rel, [math]::Round($_.Length/1MB,2)) -ForegroundColor Green
         }
 
-# ───────────────────────────────────────────────────────────────────
-# АРТЕФАКТЫ ДЛЯ СКАЧИВАНИЯ
-# ───────────────────────────────────────────────────────────────────
+on_failure:
+  - ps: |
+      Write-Host "=== FAILURE: all cmake/vcpkg logs ===" -ForegroundColor Red
+      foreach ($dir in @("C:\vcpkg\buildtrees\detect_compiler","C:\tdlib\example\uwp\build-uwp")) {
+        Get-ChildItem $dir -Recurse -Filter "*.log" -EA SilentlyContinue | ForEach-Object {
+          Write-Host "=== $($_.FullName) ===" -ForegroundColor Yellow
+          Get-Content $_.FullName -EA SilentlyContinue | Select-Object -Last 80
+        }
+      }
+
 artifacts:
 
   - path: C:\tdlib\example\uwp\build-uwp\vsix\*.vsix
@@ -268,20 +266,17 @@ artifacts:
     name: TDLib-UWP-NuGet
     type: NuGetPackage
 
-  # ARM — реальный Windows Phone 10
   - path: C:\tdlib\example\uwp\build-uwp\release\retail\ARM\**\*
     name: TDLib-ARM-WindowsPhone10
 
   - path: C:\tdlib\example\uwp\build-uwp\release\retail\ARM64\**\*
     name: TDLib-ARM64
 
-  # x86 / x64 — эмулятор
   - path: C:\tdlib\example\uwp\build-uwp\release\retail\x86\**\*
     name: TDLib-x86-Emulator
 
   - path: C:\tdlib\example\uwp\build-uwp\release\retail\x64\**\*
     name: TDLib-x64-Emulator
 
-  # Логи — всегда, полезно при отладке
   - path: C:\tdlib\example\uwp\build-uwp\**\*.log
     name: Build-Logs
