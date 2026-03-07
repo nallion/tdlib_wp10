@@ -85,6 +85,9 @@ install:
       $tripDir = $env:TRIPLETS_DIR
       $vsPath  = [Environment]::GetEnvironmentVariable("VS2022_PATH","Machine")
       New-Item -ItemType Directory -Force -Path $tripDir | Out-Null
+      # CMake requires forward slashes - backslash is invalid escape e.g. \P in \Program
+      $vsPathCMake = $vsPath.Replace("\", "/")
+
       $triplets = @{ "arm-uwp"="ARM"; "arm64-uwp"="ARM64"; "x86-uwp"="x86"; "x64-uwp"="x64" }
       foreach ($t in $triplets.GetEnumerator()) {
         $lines = @(
@@ -94,7 +97,7 @@ install:
           "set(VCPKG_CMAKE_SYSTEM_NAME WindowsStore)",
           "set(VCPKG_CMAKE_SYSTEM_VERSION 10.0)",
           "set(VCPKG_PLATFORM_TOOLSET v143)",
-          "set(VCPKG_VISUAL_STUDIO_PATH `"$vsPath`")"
+          "set(VCPKG_VISUAL_STUDIO_PATH `"$vsPathCMake`")"
         )
         $outPath = "$tripDir\$($t.Key).cmake"
         [IO.File]::WriteAllLines($outPath, $lines, [Text.Encoding]::ASCII)
