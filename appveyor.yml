@@ -1,41 +1,38 @@
 image: Visual Studio 2017
 
-# Включаем клонирование, если запускаем не из корня TDLib
-# Если конфиг лежит внутри репозитория TDLib, этот блок можно пропустить
-clone_folder: c:\projects\td
+# Глобальная конфигурация сборки
+configuration: Release
 
-environment:
-  VCPKG_TARGET_TRIPLET: arm-uwp
+clone_folder: c:\projects\td
 
 cache:
   - c:\tools\vcpkg\installed -> vcpkg_triplet.txt
 
+environment:
+  VCPKG_TARGET_TRIPLET: arm-uwp
+
 install:
-  # 1. Если репозиторий еще не склонирован (например, запуск через пустой проект)
-  - cd c:\projects
-  - if not exist td git clone https://github.com/tdlib/td.git
-  - cd td
+  # 1. Клонирование и подмодули
+  - cd c:\projects\td
   - git submodule update --init --recursive
 
-  # 2. Установка системных утилит (gperf и php критичны для генерации кода TDLib)
+  # 2. Инструменты (gperf и php)
   - choco install gperf -y
   - choco install php -y
   - set PATH=C:\tools\php83;%PATH%
 
-  # 3. Подготовка OpenSSL и Zlib через vcpkg для ARM (UWP)
+  # 3. Зависимости через vcpkg
   - echo %VCPKG_TARGET_TRIPLET% > vcpkg_triplet.txt
   - cd C:\tools\vcpkg
   - git pull
   - .\bootstrap-vcpkg.bat
   - vcpkg install openssl:%VCPKG_TARGET_TRIPLET% zlib:%VCPKG_TARGET_TRIPLET%
-  
-  # Возвращаемся в папку проекта
   - cd c:\projects\td
 
 before_build:
   - mkdir build
   - cd build
-  # 4. Генерация проекта Visual Studio для Windows Store (UWP)
+  # Генерируем решение для ARM UWP
   - >
     cmake -G "Visual Studio 15 2017"
     -A ARM
@@ -43,17 +40,21 @@ before_build:
     -DCMAKE_SYSTEM_VERSION=10.0
     -DCMAKE_TOOLCHAIN_FILE=C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake
     -DTD_ENABLE_DOTNET=ON
+    -DTD_ENABLE_LTO=OFF
     ..
 
 build:
-  project: c:\projects\td\build\tdlib.sln
+  # Указываем путь к файлу решения
+  project: build\tdlib.sln
   parallel: true
   verbosity: minimal
-  configuration: Release
 
+# Настройки артефактов (пути должны соответствовать структуре после сборки)
 artifacts:
-  # Основной результат для Windows Phone приложения (C# или C++)
   - path: build\Release\tdni.dll
     name: tdni_dll
   - path: build\Release\tdni.winmd
     name: tdni_metadata
+
+# Отключаем тесты, чтобы сэкономить время в облаке
+test: off
