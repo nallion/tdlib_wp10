@@ -31,13 +31,12 @@ before_build:
     -DCMAKE_SYSTEM_NAME=WindowsStore
     -DCMAKE_SYSTEM_VERSION=10.0
     -DCMAKE_TOOLCHAIN_FILE=C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake
-    -DTD_ENABLE_DOTNET=ON
+    -DTD_ENABLE_DOTNET=CX
     -DTD_ENABLE_LTO=OFF
     ..
 
 build_script:
   - cd %PROJECT_DIR%\build
-  # Используем более простой поиск без сложных циклов, чтобы не злить парсер YAML
   - dir /s /b tdni.vcxproj > proj_path.txt
   - set /p V_PROJ=<proj_path.txt
   - echo Building project found at %V_PROJ%
