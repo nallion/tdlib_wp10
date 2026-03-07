@@ -6,26 +6,29 @@ platform: ARM
 environment:
   VCPKG_TARGET_TRIPLET: arm-uwp
   OPENSSL_NO_ASM: 1
-
-clone_folder: c:\projects\td
-
-cache:
-  - c:\tools\vcpkg\installed -> vcpkg_triplet.txt
+  # Папка, куда склонируем TDLib
+  PROJECT_DIR: c:\projects\td
 
 install:
-  # Инструменты
+  # 1. Явное клонирование официального репозитория
+  - mkdir %PROJECT_DIR%
+  - git clone https://github.com/tdlib/td.git %PROJECT_DIR%
+  - cd %PROJECT_DIR%
+  - git submodule update --init --recursive
+
+  # 2. Установка инструментов
   - choco install gperf -y
   - choco install strawberryperl -y
   - choco install php -y
   - set PATH=C:\Strawberry\perl\bin;C:\tools\php83;%PATH%
 
-  # Подготовка vcpkg (без обновления самого vcpkg!)
+  # 3. Подготовка vcpkg для зависимостей
   - cd C:\tools\vcpkg
   - .\bootstrap-vcpkg.bat
   - vcpkg install zlib:%VCPKG_TARGET_TRIPLET% openssl:%VCPKG_TARGET_TRIPLET% --clean-after-build
   
-  - cd %APPVEYOR_BUILD_FOLDER%
-  - git submodule update --init --recursive
+  # Возвращаемся в папку склонированного репозитория
+  - cd %PROJECT_DIR%
 
 before_build:
   - mkdir build
@@ -41,15 +44,15 @@ before_build:
     ..
 
 build_script:
-  - cd %APPVEYOR_BUILD_FOLDER%\build
-  # Собираем ТОЛЬКО проект tdni. Это сэкономит около 20-30 минут.
+  - cd %PROJECT_DIR%\build
+  # Собираем только tdni, чтобы вписаться в лимиты времени
   - msbuild tdlib.sln /t:tdni /p:Configuration=Release /p:Platform=ARM /m
 
 artifacts:
-  # Пути к готовым файлам после сборки только tdni
-  - path: build\Release\tdni\tdni.dll
+  # Находим скомпилированные файлы
+  - path: build\Release\tdni.dll
     name: tdni_dll
-  - path: build\Release\tdni\tdni.winmd
+  - path: build\Release\tdni.winmd
     name: tdni_metadata
 
 test: off
