@@ -88,13 +88,18 @@ install:
         "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
       )
       $addArgs = $components | ForEach-Object { "--add", $_ }
-      $proc = Start-Process -FilePath $vsInstaller -Wait -PassThru -ArgumentList (
-        @("modify","--installPath",$env:VS2022_PATH,"--quiet","--norestart","--noUpdateInstaller") + $addArgs
-      )
+      $outLog = "C:\vs_installer_out.txt"
+      $errLog = "C:\vs_installer_err.txt"
+      $proc = Start-Process -FilePath $vsInstaller -Wait -PassThru `
+              -RedirectStandardOutput $outLog -RedirectStandardError $errLog `
+              -ArgumentList (
+                @("modify","--installPath",$env:VS2022_PATH,"--passive","--norestart","--noUpdateInstaller") + $addArgs
+              )
+      Write-Host "vs_installer exit: $($proc.ExitCode)" -ForegroundColor $(if ($proc.ExitCode -in @(0,3010)) {"Green"} else {"Red"})
+      if (Test-Path $outLog) { Write-Host "STDOUT:"; Get-Content $outLog }
+      if (Test-Path $errLog) { Write-Host "STDERR:"; Get-Content $errLog }
       if ($proc.ExitCode -notin @(0, 3010)) {
-        Write-Warning "vs_installer returned $($proc.ExitCode)"
-      } else {
-        Write-Host "VS components OK (exit: $($proc.ExitCode))" -ForegroundColor Green
+        Write-Warning "vs_installer returned $($proc.ExitCode) - will try to continue"
       }
 
   # STEP 3: Verify ARM cl.exe
@@ -118,6 +123,27 @@ install:
       Write-Host "=== Creating custom UWP triplets ===" -ForegroundColor Cyan
       New-Item -ItemType Directory -Force -Path $env:TRIPLETS_DIR | Out-Null
 
+      # Auto-detect the toolset version that has ARM support
+      # ARM cl.exe may be from an older MSVC (e.g. 14.16 = v141) even in VS2022
+      $armClPath = Get-ChildItem "$env:VS2022_PATH\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
+                   Where-Object { $_.FullName -like "*\arm\cl.exe" } | Select-Object -First 1
+
+      $toolset = "v143"  # default for VS2022
+      if ($armClPath) {
+        $msvcVer = ($armClPath.FullName -split "\MSVC\")[1] -split "\" | Select-Object -First 1
+        # Map MSVC directory version to toolset: 14.1x=v141, 14.2x=v142, 14.3x+=v143
+        $major = [int]($msvcVer -split "\.")[1]
+        if    ($major -lt 20) { $toolset = "v141" }
+        elseif($major -lt 30) { $toolset = "v142" }
+        else                  { $toolset = "v143" }
+        Write-Host "ARM MSVC version: $msvcVer -> toolset: $toolset" -ForegroundColor Green
+      } else {
+        Write-Warning "ARM cl.exe not found - using default toolset $toolset"
+      }
+
+      # Also write toolset to ENV_FILE for build_script step
+      Add-Content $env:ENV_FILE "`$env:ARM_TOOLSET = '$toolset'"
+
       $triplets = @{ "arm-uwp"="ARM"; "arm64-uwp"="ARM64"; "x86-uwp"="x86"; "x64-uwp"="x64" }
       foreach ($t in $triplets.GetEnumerator()) {
         $lines = @(
@@ -126,7 +152,7 @@ install:
           "set(VCPKG_LIBRARY_LINKAGE dynamic)",
           "set(VCPKG_CMAKE_SYSTEM_NAME WindowsStore)",
           "set(VCPKG_CMAKE_SYSTEM_VERSION 10.0)",
-          "set(VCPKG_PLATFORM_TOOLSET v143)",
+          "set(VCPKG_PLATFORM_TOOLSET $toolset)",
           "set(VCPKG_VISUAL_STUDIO_PATH `"$env:VS2022_PATH_CMAKE`")"
         )
         $outPath = "$env:TRIPLETS_DIR\$($t.Key).cmake"
