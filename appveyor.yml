@@ -26,7 +26,7 @@ install:
   - cd C:\tools\vcpkg
   - .\bootstrap-vcpkg.bat
   - vcpkg install zlib:%VCPKG_TARGET_TRIPLET% openssl:%VCPKG_TARGET_TRIPLET% --clean-after-build
-  
+
   # Возвращаемся в папку склонированного репозитория
   - cd %PROJECT_DIR%
 
