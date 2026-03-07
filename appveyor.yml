@@ -1,283 +1,287 @@
-# ═══════════════════════════════════════════════════════════════
-#  AppVeyor CI — сборка TDLib JSON для Windows Phone 10 (UWP)
-#  Результат: tdjson.dll для ARM / ARM64 / x86 / x64
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+#  AppVeyor CI — сборка TDLib JSON для Windows Phone 10 (UWP ARM)
+#
+#  ФИКС: error: vcpkg was unable to detect the active compiler
+#  ПРИЧИНА: на appveyor image "Visual Studio 2022" не установлен
+#           компонент "C++ Universal Windows Platform tools" (ARM)
+#  РЕШЕНИЕ: явно устанавливаем нужные VS компоненты перед vcpkg
+# ═══════════════════════════════════════════════════════════════════
 
 version: 1.0.{build}
 
-# Visual Studio 2022 — MSVC 19.3+, поддержка C++17 и UWP ARM
+# Visual Studio 2022 — базовый образ
 image: Visual Studio 2022
 
-# Одна конфигурация — build.ps1 сам собирает Debug+Release внутри
+# Отключить стандартную сборку
+build: off
+test: off
+
 configuration: Release
 
-# Не клонировать репозиторий автоматически — мы клонируем TDLib сами
-clone_depth: 1
-
-# ───────────────────────────────────────────────────────────────
-# Переменные окружения
-# ───────────────────────────────────────────────────────────────
 environment:
-  # Конкретный коммит vcpkg — НЕЛЬЗЯ менять, новее сломает arm-uwp
+  # Конкретный коммит vcpkg — НЕЛЬЗЯ менять на новее!
   VCPKG_COMMIT: bc3512a509f9d29b37346a7e7e929f9a26e66c7e
   VCPKG_ROOT: C:\vcpkg
   TDLIB_DIR: C:\tdlib
-
-  # Параллельная компиляция MSVC
   CL: /MP
-
-  # Сохранять кэш даже при ошибке (удобно для отладки)
   APPVEYOR_SAVE_CACHE_ON_ERROR: true
 
-# ───────────────────────────────────────────────────────────────
-# Кэш — экономит 1.5-2 часа на повторных сборках
-# Инвалидируется при смене коммита vcpkg
-# ───────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────────
+# Кэш — повторные сборки ~20-30 мин вместо 3-4 часов
+# ───────────────────────────────────────────────────────────────────
 cache:
-  # Установленные пакеты vcpkg (openssl + zlib для всех UWP triplet'ов)
   - C:\vcpkg\installed -> appveyor.yml
   - C:\vcpkg\packages  -> appveyor.yml
-  # Промежуточные результаты сборки TDLib
   - C:\tdlib\example\uwp\build-uwp -> appveyor.yml
 
-# ───────────────────────────────────────────────────────────────
-# Установка инструментов
-# ───────────────────────────────────────────────────────────────
 install:
-  # 1. Клонировать TDLib (последний master)
+
+  # ── ШАГ 1: Установить ARM + UWP компоненты Visual Studio ──────────
+  # КОРЕНЬ ОШИБКИ: vcpkg не находит ARM toolchain потому что на
+  # стандартном appveyor-образе НЕТ этих компонентов VS:
+  #   - C++ ARM build tools             (для arm-uwp triplet)
+  #   - C++ ARM64 build tools           (для arm64-uwp triplet)
+  #   - C++ Universal Windows Platform  (для всех uwp triplet'ов)
+  #   - Windows 10 SDK 19041            (заголовки UWP ARM)
+  - ps: |
+      Write-Host "=== Installing VS2022 ARM + UWP components ===" -ForegroundColor Cyan
+
+      $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+
+      # Найти установленный экземпляр VS 2022
+      $vsPath = @(
+        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise",
+        "C:\Program Files\Microsoft Visual Studio\2022\Community",
+        "C:\Program Files\Microsoft Visual Studio\2022\Professional"
+      ) | Where-Object { Test-Path "$_\VC\Auxiliary\Build\vcvarsall.bat" } | Select-Object -First 1
+
+      if (-not $vsPath) { Write-Error "VS 2022 не найден!"; exit 1 }
+      Write-Host "VS path: $vsPath" -ForegroundColor Gray
+
+      # Компоненты необходимые для arm-uwp и arm64-uwp
+      $components = @(
+        "Microsoft.VisualStudio.Component.VC.Tools.ARM",
+        "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
+        "Microsoft.VisualStudio.ComponentGroup.UWP.VC",
+        "Microsoft.VisualStudio.Component.Windows10SDK.19041",
+        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+      )
+
+      $addArgs = $components | ForEach-Object { "--add", $_ }
+
+      $proc = Start-Process -FilePath $vsInstaller -Wait -PassThru -ArgumentList (@(
+        "modify",
+        "--installPath", $vsPath,
+        "--quiet", "--norestart", "--noUpdateInstaller"
+      ) + $addArgs)
+
+      # 0 = успешно, 3010 = нужна перезагрузка (в CI норма)
+      if ($proc.ExitCode -notin @(0, 3010)) {
+        Write-Warning "vs_installer вернул $($proc.ExitCode) — компоненты возможно уже установлены"
+      } else {
+        Write-Host "VS компоненты установлены (exit: $($proc.ExitCode))" -ForegroundColor Green
+      }
+
+      # Сохраняем путь к vcvarsall для следующих шагов
+      $vcvarsall = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
+      [Environment]::SetEnvironmentVariable("VCVARSALL_PATH", $vcvarsall, "Process")
+      [Environment]::SetEnvironmentVariable("VCPKG_VISUAL_STUDIO_PATH", $vsPath, "Machine")
+      [Environment]::SetEnvironmentVariable("VCPKG_VISUAL_STUDIO_PATH", $vsPath, "Process")
+      Write-Host "VCPKG_VISUAL_STUDIO_PATH = $vsPath" -ForegroundColor Green
+
+  # ── ШАГ 2: Проверить ARM cl.exe ───────────────────────────────────
+  - ps: |
+      Write-Host "=== Verifying ARM toolchain ===" -ForegroundColor Cyan
+      $vsPath = $env:VCPKG_VISUAL_STUDIO_PATH
+      $armCl  = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -like "*\arm\cl.exe" } | Select-Object -First 1
+
+      if ($armCl) {
+        Write-Host "ARM cl.exe: $($armCl.FullName)" -ForegroundColor Green
+      } else {
+        Write-Warning "ARM cl.exe не найден — ARM компонент не установился"
+        Write-Host "Доступные варианты cl.exe:" -ForegroundColor Yellow
+        Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -ErrorAction SilentlyContinue |
+          ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
+      }
+
+  # ── ШАГ 3: Клонировать TDLib ──────────────────────────────────────
   - ps: |
       Write-Host "=== Cloning TDLib ===" -ForegroundColor Cyan
       if (-not (Test-Path $env:TDLIB_DIR)) {
         git clone --depth 1 https://github.com/tdlib/td.git $env:TDLIB_DIR
       } else {
-        Write-Host "TDLib already cloned, pulling latest..." -ForegroundColor Yellow
-        cd $env:TDLIB_DIR
-        git pull
+        Write-Host "TDLib уже есть (кэш)" -ForegroundColor Yellow
+        Push-Location $env:TDLIB_DIR; git pull --ff-only; Pop-Location
       }
-      Write-Host "TDLib version:" -ForegroundColor Green
-      cd $env:TDLIB_DIR
-      git log --oneline -1
+      Push-Location $env:TDLIB_DIR
+      Write-Host "Commit: $(git log --oneline -1)" -ForegroundColor Green
+      Pop-Location
 
-  # 2. Клонировать vcpkg на КОНКРЕТНЫЙ коммит
+  # ── ШАГ 4: Клонировать vcpkg (зафиксированный коммит) ────────────
   - ps: |
-      Write-Host "=== Setting up vcpkg (commit: $env:VCPKG_COMMIT) ===" -ForegroundColor Cyan
+      Write-Host "=== Setting up vcpkg ($env:VCPKG_COMMIT) ===" -ForegroundColor Cyan
       if (-not (Test-Path "$env:VCPKG_ROOT\vcpkg.exe")) {
         git clone https://github.com/Microsoft/vcpkg.git $env:VCPKG_ROOT
-        cd $env:VCPKG_ROOT
+        Push-Location $env:VCPKG_ROOT
         git checkout $env:VCPKG_COMMIT
         .\bootstrap-vcpkg.bat -disableMetrics
+        Pop-Location
       } else {
-        Write-Host "vcpkg already bootstrapped" -ForegroundColor Yellow
-        cd $env:VCPKG_ROOT
-        # Убедиться что на правильном коммите
-        $current = git rev-parse HEAD
-        if ($current -ne $env:VCPKG_COMMIT) {
-          Write-Host "Wrong vcpkg commit, fixing..." -ForegroundColor Red
+        Push-Location $env:VCPKG_ROOT
+        $cur = git rev-parse HEAD
+        if ($cur -ne $env:VCPKG_COMMIT) {
           git checkout $env:VCPKG_COMMIT
           .\bootstrap-vcpkg.bat -disableMetrics
+        } else {
+          Write-Host "vcpkg на нужном коммите" -ForegroundColor Green
         }
+        Pop-Location
       }
 
-  # 3. Установить зависимости для всех UWP архитектур
-  #    arm-uwp    → реальное устройство Windows Phone 10
-  #    arm64-uwp  → новые ARM64 устройства
-  #    x86-uwp    → эмулятор в Visual Studio
-  #    x64-uwp    → эмулятор x64
+  # ── ШАГ 5: Установить зависимости vcpkg ───────────────────────────
+  # ВАЖНО: запускаем через cmd с vcvarsall чтобы vcpkg видел ARM cl.exe
   - ps: |
       Write-Host "=== Installing vcpkg dependencies ===" -ForegroundColor Cyan
 
-      $packages = @(
+      $allPkgs = @(
         "gperf:x86-windows",
-        "openssl:arm-uwp",
-        "openssl:arm64-uwp",
-        "openssl:x64-uwp",
-        "openssl:x86-uwp",
-        "zlib:arm-uwp",
-        "zlib:arm64-uwp",
-        "zlib:x64-uwp",
-        "zlib:x86-uwp"
+        "openssl:arm-uwp", "openssl:arm64-uwp", "openssl:x64-uwp", "openssl:x86-uwp",
+        "zlib:arm-uwp",    "zlib:arm64-uwp",    "zlib:x64-uwp",    "zlib:x86-uwp"
       )
 
-      # Проверяем что уже установлено (из кэша)
-      $installed = & "$env:VCPKG_ROOT\vcpkg.exe" list 2>$null
-      $toInstall = @()
-
-      foreach ($pkg in $packages) {
-        $pkgName = $pkg -replace ":", " "
-        if (-not ($installed | Where-Object { $_ -like "*$pkgName*" })) {
-          $toInstall += $pkg
-        }
+      # Фильтруем уже установленные (из кэша)
+      $installed = & "$env:VCPKG_ROOT\vcpkg.exe" list 2>$null | Out-String
+      $toInstall = $allPkgs | Where-Object {
+        $name    = ($_ -split ":")[0]
+        $triplet = ($_ -split ":")[1]
+        -not ($installed -match "$name\s.*$triplet")
       }
 
-      if ($toInstall.Count -gt 0) {
-        Write-Host "Installing: $($toInstall -join ', ')" -ForegroundColor Yellow
-        & "$env:VCPKG_ROOT\vcpkg.exe" install $toInstall --disable-metrics
+      if ($toInstall.Count -eq 0) {
+        Write-Host "Все пакеты уже установлены (из кэша)" -ForegroundColor Green
       } else {
-        Write-Host "All packages already installed (from cache)" -ForegroundColor Green
+        Write-Host "Устанавливаем: $($toInstall -join ', ')" -ForegroundColor Yellow
+
+        # Запускаем vcpkg через Developer Command Prompt (vcvarsall x86)
+        # Это обеспечивает доступ ARM cl.exe через PATH vcvarsall
+        $pkgList   = $toInstall -join " "
+        $vcpkgExe  = "$env:VCPKG_ROOT\vcpkg.exe"
+        $tmpCmd    = [IO.Path]::GetTempFileName() + ".cmd"
+
+        @"
+@echo off
+call "$env:VCVARSALL_PATH" x86
+if %errorlevel% neq 0 exit /b %errorlevel%
+"$vcpkgExe" install $pkgList --disable-metrics
+exit /b %errorlevel%
+"@ | Set-Content $tmpCmd -Encoding ASCII
+
+        cmd /c $tmpCmd
+        $exitCode = $LASTEXITCODE
+        Remove-Item $tmpCmd -ErrorAction SilentlyContinue
+
+        if ($exitCode -ne 0) {
+          Write-Error "vcpkg install failed (exit: $exitCode)"
+          exit $exitCode
+        }
+        Write-Host "vcpkg packages installed OK" -ForegroundColor Green
       }
 
-  # 4. Установить 7-Zip (нужен build.ps1 для создания VSIX архива)
+  # ── ШАГ 6: 7-Zip ──────────────────────────────────────────────────
   - ps: |
-      Write-Host "=== Installing 7-Zip ===" -ForegroundColor Cyan
       if (-not (Test-Path "C:\Program Files\7-Zip\7z.exe")) {
         choco install 7zip --no-progress -y
-      } else {
-        Write-Host "7-Zip already installed" -ForegroundColor Green
       }
+      $env:PATH = "C:\Program Files\7-Zip;$env:PATH"
+      Write-Host "7-Zip OK" -ForegroundColor Green
 
-  # 5. Установить PHP (опционально, для XML документации)
+  # ── ШАГ 7: PHP ────────────────────────────────────────────────────
   - ps: |
-      Write-Host "=== Installing PHP ===" -ForegroundColor Cyan
       if (-not (Get-Command php -ErrorAction SilentlyContinue)) {
         choco install php --no-progress -y
+        $env:PATH = "C:\tools\php;$env:PATH"
+      }
+      Write-Host "PHP: $(php --version 2>&1 | Select-Object -First 1)" -ForegroundColor Green
+
+  # ── ШАГ 8: gperf в PATH ───────────────────────────────────────────
+  - ps: |
+      $gperfDir = "C:\vcpkg\installed\x86-windows\tools\gperf"
+      if (Test-Path $gperfDir) {
+        $env:PATH = "$gperfDir;$env:PATH"
+        Write-Host "gperf OK" -ForegroundColor Green
       } else {
-        Write-Host "PHP already installed" -ForegroundColor Green
+        Write-Warning "gperf не найден в $gperfDir"
       }
 
-  # 6. Добавить gperf и 7-Zip в PATH
+  # ── ШАГ 9: Итоговая проверка ──────────────────────────────────────
   - ps: |
-      $paths = @(
-        "C:\vcpkg\installed\x86-windows\tools\gperf",
-        "C:\Program Files\7-Zip",
-        "C:\tools\php"
-      )
-      foreach ($p in $paths) {
-        if (Test-Path $p) {
-          $env:PATH = "$p;$env:PATH"
-          Write-Host "Added to PATH: $p" -ForegroundColor Green
-        }
-      }
-
-  # 7. Проверить все инструменты перед сборкой
-  - ps: |
-      Write-Host "=== Tool verification ===" -ForegroundColor Cyan
-      cmake --version
-      Write-Host "---"
-      gperf --version
-      Write-Host "---"
-      & "C:\Program Files\7-Zip\7z.exe" i 2>&1 | Select-Object -First 2
-      Write-Host "---"
+      Write-Host "`n=== Pre-build tool summary ===" -ForegroundColor Cyan
+      cmake --version | Select-Object -First 1
+      gperf --version 2>&1 | Select-Object -First 1
       php --version 2>&1 | Select-Object -First 1
-      Write-Host "=== vcpkg installed packages ===" -ForegroundColor Cyan
+      & "C:\Program Files\7-Zip\7z.exe" i 2>&1 | Select-Object -First 1
+      Write-Host "VCPKG_VISUAL_STUDIO_PATH = $env:VCPKG_VISUAL_STUDIO_PATH"
       & "$env:VCPKG_ROOT\vcpkg.exe" list
 
-# ───────────────────────────────────────────────────────────────
-# Отключить стандартную сборку MSBuild — используем свой скрипт
-# ───────────────────────────────────────────────────────────────
-build: off
-
-# ───────────────────────────────────────────────────────────────
-# Основная сборка TDLib
-# build.ps1 выполняет 6 конфигураций:
-#   ARM Debug, ARM Release
-#   ARM64 Debug, ARM64 Release
-#   x86 Debug, x86 Release
-#   x64 Debug, x64 Release
-# Время: ~2-4 часа без кэша, ~20-30 мин с кэшем
-# ───────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────────
+# ОСНОВНАЯ СБОРКА — build.ps1 делает 6-8 конфигураций внутри
+# ───────────────────────────────────────────────────────────────────
 build_script:
   - ps: |
-      Write-Host "=== Starting TDLib UWP build ===" -ForegroundColor Cyan
-      Write-Host "Time: $(Get-Date)" -ForegroundColor Gray
+      Write-Host "=== TDLib UWP build start: $(Get-Date -Format 'HH:mm:ss') ===" -ForegroundColor Cyan
+      Set-Location "$env:TDLIB_DIR\example\uwp"
 
-      cd "$env:TDLIB_DIR\example\uwp"
+      $cached = (Test-Path "build-uwp\vsix\tdlib.vsix") -and
+                (@(Get-ChildItem "build-uwp\nupkg\*.nupkg" -EA SilentlyContinue).Count -gt 0)
 
-      # Проверяем — возможно уже собрано из кэша
-      $vsixExists  = Test-Path "build-uwp\vsix\tdlib.vsix"
-      $nupkgExists = (Get-ChildItem "build-uwp\nupkg\*.nupkg" -ErrorAction SilentlyContinue).Count -gt 0
-
-      if ($vsixExists -and $nupkgExists) {
-        Write-Host "Build artifacts found in cache — skipping rebuild" -ForegroundColor Green
+      if ($cached) {
+        Write-Host "Артефакты в кэше — сборка не нужна" -ForegroundColor Green
       } else {
-        Write-Host "Building TDLib for UWP (this takes 2-4 hours)..." -ForegroundColor Yellow
-
-        # Запускаем официальный build.ps1 с флагом -nupkg
-        # -vcpkg_root  — путь к vcpkg
-        # -nupkg       — дополнительно собрать NuGet пакет
-        powershell -ExecutionPolicy ByPass `
-          .\build.ps1 `
-          -vcpkg_root $env:VCPKG_ROOT `
-          -nupkg
-
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "Build FAILED with exit code $LASTEXITCODE" -ForegroundColor Red
-          exit $LASTEXITCODE
-        }
+        powershell -ExecutionPolicy ByPass .\build.ps1 -vcpkg_root $env:VCPKG_ROOT -nupkg
+        if ($LASTEXITCODE -ne 0) { Write-Error "build.ps1 failed!"; exit $LASTEXITCODE }
       }
+      Write-Host "=== Done: $(Get-Date -Format 'HH:mm:ss') ===" -ForegroundColor Green
 
-      Write-Host "=== Build completed at $(Get-Date) ===" -ForegroundColor Green
-
-# ───────────────────────────────────────────────────────────────
-# Проверка результатов
-# ───────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────────
+# РЕЗУЛЬТАТЫ
+# ───────────────────────────────────────────────────────────────────
 after_build:
   - ps: |
-      Write-Host "=== Build results ===" -ForegroundColor Cyan
-      cd "$env:TDLIB_DIR\example\uwp"
+      $buildDir = "$env:TDLIB_DIR\example\uwp\build-uwp"
+      Write-Host "`n=== tdjson.dll files ===" -ForegroundColor Cyan
+      Get-ChildItem $buildDir -Recurse -Filter "tdjson.dll" -EA SilentlyContinue |
+        ForEach-Object {
+          $rel = $_.FullName.Replace($buildDir,"").TrimStart("\")
+          Write-Host ("  {0,-55} {1,5} MB" -f $rel, [math]::Round($_.Length/1MB,2)) -ForegroundColor Green
+        }
 
-      # VSIX расширение
-      if (Test-Path "build-uwp\vsix") {
-        Write-Host "`n[VSIX Extension]" -ForegroundColor Yellow
-        Get-ChildItem "build-uwp\vsix" -Recurse | Format-Table Name, @{L="Size (KB)";E={[math]::Round($_.Length/1KB,1)}}
-      }
-
-      # NuGet пакет
-      if (Test-Path "build-uwp\nupkg") {
-        Write-Host "`n[NuGet Package]" -ForegroundColor Yellow
-        Get-ChildItem "build-uwp\nupkg" -Recurse | Format-Table Name, @{L="Size (KB)";E={[math]::Round($_.Length/1KB,1)}}
-      }
-
-      # DLL файлы по архитектурам
-      Write-Host "`n[DLL files by architecture]" -ForegroundColor Yellow
-      Get-ChildItem "build-uwp" -Recurse -Filter "tdjson.dll" | ForEach-Object {
-        $arch = $_.DirectoryName -replace ".*build-uwp\\", "" -replace "\\.*", ""
-        Write-Host "  [$arch] $($_.Name) — $([math]::Round($_.Length/1MB,2)) MB" -ForegroundColor Green
-      }
-
-# ───────────────────────────────────────────────────────────────
-# Артефакты — что скачать после сборки
-# ───────────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────────
+# АРТЕФАКТЫ ДЛЯ СКАЧИВАНИЯ
+# ───────────────────────────────────────────────────────────────────
 artifacts:
-  # VSIX расширение для Visual Studio
+
   - path: C:\tdlib\example\uwp\build-uwp\vsix\*.vsix
     name: TDLib-UWP-VSIX
-    type: zip
 
-  # NuGet пакет
   - path: C:\tdlib\example\uwp\build-uwp\nupkg\*.nupkg
     name: TDLib-UWP-NuGet
     type: NuGetPackage
 
-  # DLL для ARM (Windows Phone 10 — реальное устройство)
+  # ARM — реальный Windows Phone 10
   - path: C:\tdlib\example\uwp\build-uwp\release\retail\ARM\**\*
-    name: TDLib-ARM-Release
-    type: zip
+    name: TDLib-ARM-WindowsPhone10
 
-  # DLL для ARM64
   - path: C:\tdlib\example\uwp\build-uwp\release\retail\ARM64\**\*
-    name: TDLib-ARM64-Release
-    type: zip
+    name: TDLib-ARM64
 
-  # DLL для x86 (эмулятор)
+  # x86 / x64 — эмулятор
   - path: C:\tdlib\example\uwp\build-uwp\release\retail\x86\**\*
-    name: TDLib-x86-Release
-    type: zip
+    name: TDLib-x86-Emulator
 
-  # DLL для x64
   - path: C:\tdlib\example\uwp\build-uwp\release\retail\x64\**\*
-    name: TDLib-x64-Release
-    type: zip
+    name: TDLib-x64-Emulator
 
-  # Логи при ошибке
+  # Логи — всегда, полезно при отладке
   - path: C:\tdlib\example\uwp\build-uwp\**\*.log
     name: Build-Logs
-
-# ───────────────────────────────────────────────────────────────
-# Уведомления (опционально — закомментировать если не нужно)
-# ───────────────────────────────────────────────────────────────
-# notifications:
-#   - provider: Email
-#     to:
-#       - your@email.com
-#     on_build_success: true
-#     on_build_failure: true
