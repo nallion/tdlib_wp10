@@ -165,17 +165,17 @@ install:
 
         # Запускаем vcpkg через Developer Command Prompt (vcvarsall x86)
         # Это обеспечивает доступ ARM cl.exe через PATH vcvarsall
-        $pkgList   = $toInstall -join " "
-        $vcpkgExe  = "$env:VCPKG_ROOT\vcpkg.exe"
-        $tmpCmd    = [IO.Path]::GetTempFileName() + ".cmd"
+        $pkgList  = $toInstall -join " "
+        $vcpkgExe = "$env:VCPKG_ROOT\vcpkg.exe"
+        $tmpCmd   = [IO.Path]::GetTempFileName() + ".cmd"
 
-        @"
-@echo off
-call "$env:VCVARSALL_PATH" x86
-if %errorlevel% neq 0 exit /b %errorlevel%
-"$vcpkgExe" install $pkgList --disable-metrics
-exit /b %errorlevel%
-"@ | Set-Content $tmpCmd -Encoding ASCII
+        $lines = @(
+          "call `"$env:VCVARSALL_PATH`" x86",
+          "if %errorlevel% neq 0 exit /b %errorlevel%",
+          "`"$vcpkgExe`" install $pkgList --disable-metrics",
+          "exit /b %errorlevel%"
+        )
+        [IO.File]::WriteAllLines($tmpCmd, $lines, [Text.Encoding]::ASCII)
 
         cmd /c $tmpCmd
         $exitCode = $LASTEXITCODE
