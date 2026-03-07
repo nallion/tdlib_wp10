@@ -1,38 +1,35 @@
 image: Visual Studio 2017
 
-# Глобальная конфигурация сборки
 configuration: Release
+platform: ARM
+
+environment:
+  VCPKG_TARGET_TRIPLET: arm-uwp
+  OPENSSL_NO_ASM: 1
 
 clone_folder: c:\projects\td
 
 cache:
   - c:\tools\vcpkg\installed -> vcpkg_triplet.txt
 
-environment:
-  VCPKG_TARGET_TRIPLET: arm-uwp
-
 install:
-  # 1. Клонирование и подмодули
-  - cd c:\projects\td
-  - git submodule update --init --recursive
-
-  # 2. Инструменты (gperf и php)
+  # Инструменты
   - choco install gperf -y
+  - choco install strawberryperl -y
   - choco install php -y
-  - set PATH=C:\tools\php83;%PATH%
+  - set PATH=C:\Strawberry\perl\bin;C:\tools\php83;%PATH%
 
-  # 3. Зависимости через vcpkg
-  - echo %VCPKG_TARGET_TRIPLET% > vcpkg_triplet.txt
+  # Подготовка vcpkg (без обновления самого vcpkg!)
   - cd C:\tools\vcpkg
-  - git pull
   - .\bootstrap-vcpkg.bat
-  - vcpkg install openssl:%VCPKG_TARGET_TRIPLET% zlib:%VCPKG_TARGET_TRIPLET%
-  - cd c:\projects\td
+  - vcpkg install zlib:%VCPKG_TARGET_TRIPLET% openssl:%VCPKG_TARGET_TRIPLET% --clean-after-build
+  
+  - cd %APPVEYOR_BUILD_FOLDER%
+  - git submodule update --init --recursive
 
 before_build:
   - mkdir build
   - cd build
-  # Генерируем решение для ARM UWP
   - >
     cmake -G "Visual Studio 15 2017"
     -A ARM
@@ -43,18 +40,16 @@ before_build:
     -DTD_ENABLE_LTO=OFF
     ..
 
-build:
-  # Указываем путь к файлу решения
-  project: build\tdlib.sln
-  parallel: true
-  verbosity: minimal
+build_script:
+  - cd %APPVEYOR_BUILD_FOLDER%\build
+  # Собираем ТОЛЬКО проект tdni. Это сэкономит около 20-30 минут.
+  - msbuild tdlib.sln /t:tdni /p:Configuration=Release /p:Platform=ARM /m
 
-# Настройки артефактов (пути должны соответствовать структуре после сборки)
 artifacts:
-  - path: build\Release\tdni.dll
+  # Пути к готовым файлам после сборки только tdni
+  - path: build\Release\tdni\tdni.dll
     name: tdni_dll
-  - path: build\Release\tdni.winmd
+  - path: build\Release\tdni\tdni.winmd
     name: tdni_metadata
 
-# Отключаем тесты, чтобы сэкономить время в облаке
 test: off
