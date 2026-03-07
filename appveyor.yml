@@ -1,8 +1,8 @@
 # Build TDLib JSON for Windows Phone 10 (UWP ARM)
-# Fix: use vswhere.exe to get VS path exactly as vcpkg sees it
+# VS2017 image - native v141 toolset, ARM UWP support built-in
 
 version: 1.0.{build}
-image: Visual Studio 2022
+image: Visual Studio 2017
 build: off
 test: off
 configuration: Release
@@ -23,126 +23,64 @@ cache:
 
 install:
 
-  # STEP 1: Use vswhere.exe to find VS path EXACTLY as vcpkg sees it
-  # Critical: vcpkg also uses vswhere internally - paths must match
+  # STEP 1: Find VS2017 via vswhere, write paths to ENV_FILE
   - ps: |
-      Write-Host "=== Finding VS2022 via vswhere ===" -ForegroundColor Cyan
-
+      Write-Host "=== Finding VS2017 via vswhere ===" -ForegroundColor Cyan
       $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
-      if (-not (Test-Path $vswhere)) {
-        Write-Error "vswhere.exe not found at $vswhere"
-        exit 1
-      }
+      if (-not (Test-Path $vswhere)) { Write-Error "vswhere not found"; exit 1 }
 
-      # Query vswhere exactly like vcpkg does internally
-      $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-                           -property installationPath 2>$null
-      $vsPath = $vsPath | Select-Object -First 1
+      $vsPath = (& $vswhere -version "[15.0,16.0)" -products * -property installationPath 2>$null) |
+                Select-Object -First 1
 
       if ([string]::IsNullOrEmpty($vsPath)) {
-        Write-Host "vswhere with VC requirement failed, trying without..." -ForegroundColor Yellow
-        $vsPath = & $vswhere -latest -products * -property installationPath 2>$null
-        $vsPath = $vsPath | Select-Object -First 1
+        Write-Warning "vswhere version range failed, trying latest..."
+        $vsPath = (& $vswhere -latest -products * -property installationPath 2>$null) |
+                  Select-Object -First 1
       }
+      if ([string]::IsNullOrEmpty($vsPath)) { Write-Error "VS not found"; exit 1 }
 
-      if ([string]::IsNullOrEmpty($vsPath)) {
-        Write-Error "vswhere could not find any VS instance"
-        Write-Host "All instances found by vswhere:" -ForegroundColor Yellow
-        & $vswhere -all -products * -format json 2>$null
-        exit 1
-      }
+      Write-Host "VS path: $vsPath" -ForegroundColor Green
 
-      Write-Host "vswhere found VS at: $vsPath" -ForegroundColor Green
-
-      $vcvarsall = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
-      if (-not (Test-Path $vcvarsall)) {
-        Write-Error "vcvarsall.bat not found at: $vcvarsall"
-        exit 1
-      }
-      Write-Host "vcvarsall: $vcvarsall" -ForegroundColor Green
-
-      # Forward-slash path for CMake triplet files
+      $vcvarsall   = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
       $vsPathCMake = $vsPath.Replace("\", "/")
 
-      # Write ENV_FILE - dot-source at start of every subsequent step
+      if (-not (Test-Path $vcvarsall)) { Write-Error "vcvarsall not found: $vcvarsall"; exit 1 }
+      Write-Host "vcvarsall: $vcvarsall" -ForegroundColor Green
+
       $envLines = @(
-        "`$env:VS2022_PATH              = '$vsPath'",
-        "`$env:VCPKG_VISUAL_STUDIO_PATH = '$vsPath'",
-        "`$env:VCVARSALL_PATH           = '$vcvarsall'",
-        "`$env:VS2022_PATH_CMAKE        = '$vsPathCMake'"
+        "`$env:VS2017_PATH             = '$vsPath'",
+        "`$env:VCPKG_VISUAL_STUDIO_PATH= '$vsPath'",
+        "`$env:VCVARSALL_PATH          = '$vcvarsall'",
+        "`$env:VS2017_PATH_CMAKE       = '$vsPathCMake'"
       )
       [IO.File]::WriteAllLines($env:ENV_FILE, $envLines, [Text.Encoding]::UTF8)
       Write-Host "ENV_FILE written:" -ForegroundColor Green
       Get-Content $env:ENV_FILE
 
-  # STEP 2: Install missing ARM + UWP VS components
-  - ps: |
-      . $env:ENV_FILE
-      Write-Host "=== Installing VS2022 ARM + UWP components ===" -ForegroundColor Cyan
-      $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
-      $components  = @(
-        "Microsoft.VisualStudio.Component.VC.Tools.ARM",
-        "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
-        "Microsoft.VisualStudio.ComponentGroup.UWP.VC",
-        "Microsoft.VisualStudio.Component.Windows10SDK.19041",
-        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
-      )
-      $addArgs = $components | ForEach-Object { "--add", $_ }
-      $outLog = "C:\vs_installer_out.txt"
-      $errLog = "C:\vs_installer_err.txt"
-      $proc = Start-Process -FilePath $vsInstaller -Wait -PassThru `
-              -RedirectStandardOutput $outLog -RedirectStandardError $errLog `
-              -ArgumentList (
-                @("modify","--installPath",$env:VS2022_PATH,"--passive","--norestart","--noUpdateInstaller") + $addArgs
-              )
-      Write-Host "vs_installer exit: $($proc.ExitCode)" -ForegroundColor $(if ($proc.ExitCode -in @(0,3010)) {"Green"} else {"Red"})
-      if (Test-Path $outLog) { Write-Host "STDOUT:"; Get-Content $outLog }
-      if (Test-Path $errLog) { Write-Host "STDERR:"; Get-Content $errLog }
-      if ($proc.ExitCode -notin @(0, 3010)) {
-        Write-Warning "vs_installer returned $($proc.ExitCode) - will try to continue"
-      }
-
-  # STEP 3: Verify ARM cl.exe
+  # STEP 2: Verify ARM cl.exe (should be present natively in VS2017)
   - ps: |
       . $env:ENV_FILE
       Write-Host "=== Verifying ARM toolchain ===" -ForegroundColor Cyan
-      $armCl = Get-ChildItem "$env:VS2022_PATH\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
+
+      Write-Host "All cl.exe in VS:" -ForegroundColor Yellow
+      Get-ChildItem "$env:VS2017_PATH\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
+        ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
+
+      $armCl = Get-ChildItem "$env:VS2017_PATH\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
                Where-Object { $_.FullName -like "*\arm\cl.exe" } | Select-Object -First 1
+
       if ($armCl) {
-        Write-Host "ARM cl.exe: $($armCl.FullName)" -ForegroundColor Green
+        Write-Host "ARM cl.exe FOUND: $($armCl.FullName)" -ForegroundColor Green
       } else {
-        Write-Warning "ARM cl.exe NOT found. All cl.exe variants:"
-        Get-ChildItem "$env:VS2022_PATH\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
-          ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
+        Write-Error "ARM cl.exe NOT found - install Microsoft.VisualStudio.Component.VC.Tools.ARM"
+        exit 1
       }
 
-  # STEP 4: Create custom triplet files
-  # Use VS2022_PATH_CMAKE (forward slashes) - backslash is invalid CMake escape
+  # STEP 3: Create custom triplet files with v141 + VS2017 path
   - ps: |
       . $env:ENV_FILE
-      Write-Host "=== Creating custom UWP triplets ===" -ForegroundColor Cyan
+      Write-Host "=== Creating custom UWP triplets (v141) ===" -ForegroundColor Cyan
       New-Item -ItemType Directory -Force -Path $env:TRIPLETS_DIR | Out-Null
-
-      # Auto-detect the toolset version that has ARM support
-      # ARM cl.exe may be from an older MSVC (e.g. 14.16 = v141) even in VS2022
-      $armClPath = Get-ChildItem "$env:VS2022_PATH\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
-                   Where-Object { $_.FullName -like "*\arm\cl.exe" } | Select-Object -First 1
-
-      $toolset = "v143"  # default for VS2022
-      if ($armClPath) {
-        $msvcVer = ($armClPath.FullName -split "\MSVC\")[1] -split "\" | Select-Object -First 1
-        # Map MSVC directory version to toolset: 14.1x=v141, 14.2x=v142, 14.3x+=v143
-        $major = [int]($msvcVer -split "\.")[1]
-        if    ($major -lt 20) { $toolset = "v141" }
-        elseif($major -lt 30) { $toolset = "v142" }
-        else                  { $toolset = "v143" }
-        Write-Host "ARM MSVC version: $msvcVer -> toolset: $toolset" -ForegroundColor Green
-      } else {
-        Write-Warning "ARM cl.exe not found - using default toolset $toolset"
-      }
-
-      # Also write toolset to ENV_FILE for build_script step
-      Add-Content $env:ENV_FILE "`$env:ARM_TOOLSET = '$toolset'"
 
       $triplets = @{ "arm-uwp"="ARM"; "arm64-uwp"="ARM64"; "x86-uwp"="x86"; "x64-uwp"="x64" }
       foreach ($t in $triplets.GetEnumerator()) {
@@ -152,8 +90,8 @@ install:
           "set(VCPKG_LIBRARY_LINKAGE dynamic)",
           "set(VCPKG_CMAKE_SYSTEM_NAME WindowsStore)",
           "set(VCPKG_CMAKE_SYSTEM_VERSION 10.0)",
-          "set(VCPKG_PLATFORM_TOOLSET $toolset)",
-          "set(VCPKG_VISUAL_STUDIO_PATH `"$env:VS2022_PATH_CMAKE`")"
+          "set(VCPKG_PLATFORM_TOOLSET v141)",
+          "set(VCPKG_VISUAL_STUDIO_PATH `"$env:VS2017_PATH_CMAKE`")"
         )
         $outPath = "$env:TRIPLETS_DIR\$($t.Key).cmake"
         [IO.File]::WriteAllLines($outPath, $lines, [Text.Encoding]::ASCII)
@@ -164,7 +102,7 @@ install:
         Get-Content $_.FullName | ForEach-Object { Write-Host "  $_" }
       }
 
-  # STEP 5: Clone TDLib
+  # STEP 4: Clone TDLib
   - ps: |
       Write-Host "=== Cloning TDLib ===" -ForegroundColor Cyan
       if (-not (Test-Path $env:TDLIB_DIR)) {
@@ -172,15 +110,13 @@ install:
         Write-Host ($out -join "`n") -ForegroundColor Gray
       } else {
         Write-Host "TDLib already cloned (cache)" -ForegroundColor Yellow
-        Push-Location $env:TDLIB_DIR
-        cmd /c "git pull --ff-only 2>&1"
-        Pop-Location
+        Push-Location $env:TDLIB_DIR; cmd /c "git pull --ff-only 2>&1"; Pop-Location
       }
       Push-Location $env:TDLIB_DIR
       Write-Host "Commit: $(git log --oneline -1)" -ForegroundColor Green
       Pop-Location
 
-  # STEP 6: Clone vcpkg at pinned commit
+  # STEP 5: Clone vcpkg at pinned commit
   - ps: |
       Write-Host "=== Setting up vcpkg ($env:VCPKG_COMMIT) ===" -ForegroundColor Cyan
       if (-not (Test-Path "$env:VCPKG_ROOT\vcpkg.exe")) {
@@ -196,20 +132,17 @@ install:
           git checkout $env:VCPKG_COMMIT
           .\bootstrap-vcpkg.bat -disableMetrics
         } else {
-          Write-Host "vcpkg at correct commit" -ForegroundColor Green
+          Write-Host "vcpkg at correct commit (cached)" -ForegroundColor Green
         }
         Pop-Location
       }
 
-  # STEP 7: Install vcpkg packages
-  # Run vcpkg inside cmd that has vcvarsall activated
-  # Use --overlay-triplets with our custom files that have correct VS path
+  # STEP 6: Install vcpkg packages
   - ps: |
       . $env:ENV_FILE
       Write-Host "=== Installing vcpkg packages ===" -ForegroundColor Cyan
-      Write-Host "VS2022_PATH    : $env:VS2022_PATH"     -ForegroundColor Gray
-      Write-Host "VCVARSALL_PATH : $env:VCVARSALL_PATH"  -ForegroundColor Gray
-      Write-Host "TRIPLETS_DIR   : $env:TRIPLETS_DIR"    -ForegroundColor Gray
+      Write-Host "VCVARSALL : $env:VCVARSALL_PATH" -ForegroundColor Gray
+      Write-Host "TRIPLETS  : $env:TRIPLETS_DIR"   -ForegroundColor Gray
 
       $allPkgs = @(
         "gperf:x86-windows",
@@ -219,11 +152,9 @@ install:
 
       $listOut   = cmd /c "`"$env:VCPKG_ROOT\vcpkg.exe`" list 2>&1"
       $installed = ($listOut -join "`n")
-
       $toInstall = $allPkgs | Where-Object {
-        $n  = ($_ -split ":")[0]
-        $tr = ($_ -split ":")[1]
-        -not ($installed -match "$n")
+        $n = ($_ -split ":")[0]
+        -not ($installed -match [regex]::Escape($n))
       }
 
       if ($toInstall.Count -eq 0) {
@@ -239,7 +170,7 @@ install:
         $cmdLines.Add("@echo off")
         $cmdLines.Add("call `"$env:VCVARSALL_PATH`" x86")
         $cmdLines.Add("if %errorlevel% neq 0 ( echo vcvarsall FAILED & exit /b %errorlevel% )")
-        $cmdLines.Add("echo vcvarsall OK - cl.exe location:")
+        $cmdLines.Add("echo vcvarsall OK")
         $cmdLines.Add("where cl")
         $cmdLines.Add("`"$env:VCPKG_ROOT\vcpkg.exe`" install $pkgList $overlay --disable-metrics")
         $cmdLines.Add("exit /b %errorlevel%")
@@ -266,7 +197,7 @@ install:
         Write-Host "vcpkg packages OK" -ForegroundColor Green
       }
 
-  # STEP 8: Install 7-Zip
+  # STEP 7: Install 7-Zip
   - ps: |
       if (-not (Test-Path "C:\Program Files\7-Zip\7z.exe")) {
         choco install 7zip --no-progress -y
@@ -274,7 +205,7 @@ install:
       $env:PATH = "C:\Program Files\7-Zip;$env:PATH"
       Write-Host "7-Zip OK" -ForegroundColor Green
 
-  # STEP 9: Install PHP
+  # STEP 8: Install PHP
   - ps: |
       if (-not (Get-Command php -ErrorAction SilentlyContinue)) {
         choco install php --no-progress -y
@@ -282,7 +213,7 @@ install:
       }
       Write-Host "PHP: $(php --version 2>&1 | Select-Object -First 1)" -ForegroundColor Green
 
-  # STEP 10: Add gperf to PATH
+  # STEP 9: Add gperf to PATH
   - ps: |
       $gperfDir = "C:\vcpkg\installed\x86-windows\tools\gperf"
       if (Test-Path $gperfDir) {
@@ -292,16 +223,14 @@ install:
         Write-Warning "gperf not found at $gperfDir"
       }
 
-  # STEP 11: Pre-build summary
+  # STEP 10: Pre-build summary
   - ps: |
       . $env:ENV_FILE
       Write-Host "=== Pre-build summary ===" -ForegroundColor Cyan
       cmake --version | Select-Object -First 1
       gperf --version 2>&1 | Select-Object -First 1
       php --version 2>&1 | Select-Object -First 1
-      Write-Host "VS2022_PATH:  $env:VS2022_PATH"
-      Write-Host "VCVARSALL:    $env:VCVARSALL_PATH"
-      Write-Host "TRIPLETS_DIR: $env:TRIPLETS_DIR"
+      Write-Host "VS2017 : $env:VS2017_PATH"
       cmd /c "`"$env:VCPKG_ROOT\vcpkg.exe`" list 2>&1"
 
 build_script:
