@@ -1,5 +1,6 @@
 # Build TDLib JSON for Windows Phone 10 (UWP ARM)
-# VS2017 image - native v141 toolset, ARM UWP support built-in
+# Fix: VCPKG_LOAD_VCVARS_ENV=ON - vcpkg uses already-loaded vcvars env
+# instead of searching for VS instance (which fails for UWP triplets)
 
 version: 1.0.{build}
 image: Visual Studio 2017
@@ -33,19 +34,17 @@ install:
                 Select-Object -First 1
 
       if ([string]::IsNullOrEmpty($vsPath)) {
-        Write-Warning "vswhere version range failed, trying latest..."
         $vsPath = (& $vswhere -latest -products * -property installationPath 2>$null) |
                   Select-Object -First 1
       }
       if ([string]::IsNullOrEmpty($vsPath)) { Write-Error "VS not found"; exit 1 }
 
-      Write-Host "VS path: $vsPath" -ForegroundColor Green
-
       $vcvarsall   = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
       $vsPathCMake = $vsPath.Replace("\", "/")
 
       if (-not (Test-Path $vcvarsall)) { Write-Error "vcvarsall not found: $vcvarsall"; exit 1 }
-      Write-Host "vcvarsall: $vcvarsall" -ForegroundColor Green
+
+      Write-Host "VS path: $vsPath" -ForegroundColor Green
 
       $envLines = @(
         "`$env:VS2017_PATH             = '$vsPath'",
@@ -57,14 +56,10 @@ install:
       Write-Host "ENV_FILE written:" -ForegroundColor Green
       Get-Content $env:ENV_FILE
 
-  # STEP 2: Verify ARM cl.exe (should be present natively in VS2017)
+  # STEP 2: Verify ARM cl.exe
   - ps: |
       . $env:ENV_FILE
       Write-Host "=== Verifying ARM toolchain ===" -ForegroundColor Cyan
-
-      Write-Host "All cl.exe in VS:" -ForegroundColor Yellow
-      Get-ChildItem "$env:VS2017_PATH\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
-        ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
 
       $armCl = Get-ChildItem "$env:VS2017_PATH\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
                Where-Object { $_.FullName -like "*\arm\cl.exe" } | Select-Object -First 1
@@ -72,14 +67,21 @@ install:
       if ($armCl) {
         Write-Host "ARM cl.exe FOUND: $($armCl.FullName)" -ForegroundColor Green
       } else {
-        Write-Error "ARM cl.exe NOT found - install Microsoft.VisualStudio.Component.VC.Tools.ARM"
+        Write-Host "All cl.exe variants found:" -ForegroundColor Yellow
+        Get-ChildItem "$env:VS2017_PATH\VC\Tools\MSVC" -Recurse -Filter "cl.exe" -EA SilentlyContinue |
+          ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
+        Write-Error "ARM cl.exe NOT found"
         exit 1
       }
 
-  # STEP 3: Create custom triplet files with v141 + VS2017 path
+  # STEP 3: Create custom triplet files
+  # KEY FIX: VCPKG_LOAD_VCVARS_ENV=ON tells vcpkg to use the already-loaded
+  # vcvars environment instead of searching for a VS instance itself.
+  # This bypasses the "Unable to find a valid Visual Studio instance" error
+  # that occurs when vcpkg tries to find MSBuild UWP workload.
   - ps: |
       . $env:ENV_FILE
-      Write-Host "=== Creating custom UWP triplets (v141) ===" -ForegroundColor Cyan
+      Write-Host "=== Creating custom UWP triplets ===" -ForegroundColor Cyan
       New-Item -ItemType Directory -Force -Path $env:TRIPLETS_DIR | Out-Null
 
       $triplets = @{ "arm-uwp"="ARM"; "arm64-uwp"="ARM64"; "x86-uwp"="x86"; "x64-uwp"="x64" }
@@ -91,7 +93,8 @@ install:
           "set(VCPKG_CMAKE_SYSTEM_NAME WindowsStore)",
           "set(VCPKG_CMAKE_SYSTEM_VERSION 10.0)",
           "set(VCPKG_PLATFORM_TOOLSET v141)",
-          "set(VCPKG_VISUAL_STUDIO_PATH `"$env:VS2017_PATH_CMAKE`")"
+          "set(VCPKG_VISUAL_STUDIO_PATH `"$env:VS2017_PATH_CMAKE`")",
+          "set(VCPKG_LOAD_VCVARS_ENV ON)"
         )
         $outPath = "$env:TRIPLETS_DIR\$($t.Key).cmake"
         [IO.File]::WriteAllLines($outPath, $lines, [Text.Encoding]::ASCII)
@@ -138,6 +141,9 @@ install:
       }
 
   # STEP 6: Install vcpkg packages
+  # vcpkg is run INSIDE a cmd that has vcvarsall loaded.
+  # With VCPKG_LOAD_VCVARS_ENV=ON in triplets, vcpkg will inherit
+  # the compiler from the environment instead of searching for VS.
   - ps: |
       . $env:ENV_FILE
       Write-Host "=== Installing vcpkg packages ===" -ForegroundColor Cyan
