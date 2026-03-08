@@ -1,0 +1,14 @@
+image: Visual Studio 2017
+platform: ARM
+configuration: Release
+
+install:
+  - nuget restore YourSolution.sln
+
+build:
+  project: YourSolution.sln
+  verbosity: minimal
+
+artifacts:
+  - path: AppPackages\**\*.appxbundle
+    name: TelegramUWP_Bundle
