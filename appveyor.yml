@@ -1,0 +1,51 @@
+image: Visual Studio 2017
+
+configuration: Release
+platform: ARM
+
+environment:
+  PROJECT_DIR: c:\projects\TelegramWP10
+  MSBUILD: C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin\MSBuild.exe
+  SIGNTOOL: C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x86\signtool.exe
+  CERT_PUBLISHER: CN=TelegramWP10
+  CERT_PFX: c:\projects\TelegramWP10\sign\TelegramWP10.pfx
+  # CERT_PASSWORD: задай в AppVeyor UI -> Settings -> Environment -> Secure
+
+install:
+  - set Platform=
+  - set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin;%PATH%
+  - git clone https://github.com/nallion/tdlib_wp10 %PROJECT_DIR%
+  - cd /d %PROJECT_DIR%
+  - nuget restore TelegramWP10.sln
+
+before_build:
+  - mkdir %PROJECT_DIR%\sign
+  - ps: |
+      $cert = New-SelfSignedCertificate `
+        -Type Custom `
+        -Subject $env:CERT_PUBLISHER `
+        -KeyUsage DigitalSignature `
+        -FriendlyName "TelegramWP10" `
+        -CertStoreLocation "Cert:\CurrentUser\My" `
+        -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}")
+      $pwd = ConvertTo-SecureString -String $env:CERT_PASSWORD -Force -AsPlainText
+      Export-PfxCertificate -Cert $cert -FilePath $env:CERT_PFX -Password $pwd
+      Write-Host "Certificate generated:" $cert.Thumbprint
+
+build_script:
+  - set Platform=
+  - cd /d %PROJECT_DIR%
+  - '"%MSBUILD%" TelegramWP10.sln /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:AppxBundlePlatforms=ARM /p:AppxPackageSigningEnabled=false /m'
+
+after_build:
+  - dir /s /b %PROJECT_DIR%\TelegramClient\AppPackages\*.appxbundle > appx_path.txt 2>nul
+  - dir /s /b %PROJECT_DIR%\TelegramClient\AppPackages\*.appx >> appx_path.txt 2>nul
+  - set /p APPX_PATH=<appx_path.txt
+  - '"%SIGNTOOL%" sign /fd SHA256 /f "%CERT_PFX%" /p "%CERT_PASSWORD%" "%APPX_PATH%"'
+  - copy "%APPX_PATH%" c:\projects\TelegramWP10_signed.appx
+
+artifacts:
+  - path: c:\projects\TelegramWP10_signed.appx
+    name: TelegramWP10_signed
+
+test: off
