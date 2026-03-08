@@ -17,12 +17,8 @@
     <TargetPlatformMinVersion>10.0.10586.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
     <FileAlignment>512</FileAlignment>
-    <!-- Правильные GUID для UWP C# проекта -->
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <PackageCertificateKeyFile>TelegramClient_TemporaryKey.pfx</PackageCertificateKeyFile>
-    <!-- Явно указываем UWP, не .NETFramework -->
-    <TargetFrameworkIdentifier>.NETCore</TargetFrameworkIdentifier>
-    <TargetFrameworkVersion>v5.0</TargetFrameworkVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|ARM'">
@@ -49,7 +45,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Newtonsoft.Json для UWP (uap10.0, не netstandard2.0) -->
+    <!-- Явная ссылка на Windows UWP winmd — это главный фикс -->
+    <Reference Include="Windows">
+      <HintPath>$(MSBuildProgramFiles32)\Windows Kits\10\UnionMetadata\$(TargetPlatformVersion)\Windows.winmd</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Newtonsoft.Json для portable UWP профиля -->
     <Reference Include="Newtonsoft.Json">
       <HintPath>..\packages\Newtonsoft.Json.10.0.3\lib\portable-net45+win8+wp8+wpa81\Newtonsoft.Json.dll</HintPath>
     </Reference>
@@ -108,11 +111,11 @@
   <ItemGroup>
     <ProjectReference Include="..\TdLib.Wrapper\TdLib.Wrapper.vcxproj">
       <Project>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</Project>
-      <Name>TdLib.Wrapper</Name>
+      <n>TdLib.Wrapper</n>
     </ProjectReference>
   </ItemGroup>
 
-  <!-- Правильный UWP targets — НЕ Microsoft.WinFx.targets -->
+  <!-- UWP XAML targets — должен быть последним Import -->
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
 
 </Project>
