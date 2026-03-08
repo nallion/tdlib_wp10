@@ -3,10 +3,11 @@ platform: ARM
 configuration: Release
 
 build_script:
-  # Восстановление через MSBuild теперь обязательно для PackageReference
   - msbuild TelegramWP10.sln /t:restore
-  - msbuild TelegramWP10.sln /p:Configuration=Release /p:Platform=ARM /p:AppxPackageSigningEnabled=false /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxBundle=Never /m
+  # Добавляем флаг вывода в конкретную папку для артефактов
+  - msbuild TelegramWP10.sln /p:Configuration=Release /p:Platform=ARM /p:AppxPackageSigningEnabled=false /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxBundle=Never /p:AppxPackageDir="C:\projects\tdlib-wp10\AppPackages" /m
 
 artifacts:
-  - path: 'TelegramWP10\bin\ARM\Release\TelegramWP10.appx'
+  # Теперь артефакт будет гарантированно лежать здесь
+  - path: 'AppPackages\**\*.appx'
     name: Telegram_ARM_Package
