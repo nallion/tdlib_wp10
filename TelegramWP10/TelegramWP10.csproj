@@ -66,16 +66,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="ARM\tdjson.dll">
+    <Content Include="tdjson.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="ARM\LIBEAY32.dll">
+    <Content Include="LIBEAY32.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="ARM\SSLEAY32.dll">
+    <Content Include="SSLEAY32.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="ARM\zlib1.dll">
+    <Content Include="zlib1.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
