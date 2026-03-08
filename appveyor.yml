@@ -9,6 +9,10 @@ environment:
   PROJECT_DIR: c:\projects\td
 
 install:
+  - echo %VSCMD_ARG_TGT_ARCH%
+  - echo %Platform%
+  - echo %VCPKG_DEFAULT_TRIPLET%
+#  - rd /s /q C:\projects
   - mkdir %PROJECT_DIR%
   - git clone https://github.com/tdlib/td.git %PROJECT_DIR%
   - cd %PROJECT_DIR%
@@ -23,6 +27,7 @@ install:
   - cd C:\tools\vcpkg
   - git checkout 281d107
   - .\bootstrap-vcpkg.bat
+  - vcpkg upgrade --no-dry-run
   # Устанавливаем зависимости и для ARM (основная сборка) и для x64 (нативные инструменты)
   - vcpkg install zlib:%VCPKG_TARGET_TRIPLET% openssl:%VCPKG_TARGET_TRIPLET% --clean-after-build
   - vcpkg install zlib:x64-windows openssl:x64-windows --clean-after-build
