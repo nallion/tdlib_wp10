@@ -10,7 +10,6 @@ environment:
   CERT_PUBLISHER: CN=TelegramWP10
   CERT_PFX: c:\projects\tdlib-wp10\sign\TelegramWP10.pfx
   CERT_PASSWORD: "1234"
-  # Жёсткий путь — уже известен из диагностики
   UWP_TARGETS: C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\Microsoft\WindowsXaml\v15.0\Microsoft.Windows.UI.Xaml.CSharp.Targets
 
 install:
@@ -23,10 +22,13 @@ before_build:
   - mkdir %PROJECT_DIR%\sign
   - ps: $cert = New-SelfSignedCertificate -Type Custom -Subject $env:CERT_PUBLISHER -KeyUsage DigitalSignature -FriendlyName "TelegramWP10" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}"); $pwd = ConvertTo-SecureString -String $env:CERT_PASSWORD -Force -AsPlainText; Export-PfxCertificate -Cert $cert -FilePath $env:CERT_PFX -Password $pwd; Write-Host "Certificate generated:" $cert.Thumbprint
 
+  # Диагностика: смотрим что внутри UWP targets — ищем Import и CSharp.targets
+  - ps: |
+      Write-Host "=== Imports inside UWP Targets ==="
+      Select-String -Path $env:UWP_TARGETS -Pattern "Import|CSharp|WinFx" | ForEach-Object { Write-Host $_.Line.Trim() }
+
   - ps: |
       $t = $env:UWP_TARGETS
-      if (-not (Test-Path $t)) { Write-Error "Targets not found: $t"; exit 1 }
-      Write-Host "Using targets: $t"
       $xml = '<?xml version="1.0" encoding="utf-8"?>'
       $xml += '<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'
       $xml += '<Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists(''$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props'')" />'
@@ -94,7 +96,7 @@ before_build:
       $xml += '</Project>'
       $p = "$env:PROJECT_DIR\TelegramClient\TelegramClient.csproj"
       [System.IO.File]::WriteAllText($p, $xml, [System.Text.Encoding]::UTF8)
-      Write-Host "Written. Import line:"; Select-String "Import Project" $p
+      Write-Host "Written OK"
 
 build_script:
   - set Platform=
