@@ -3,18 +3,20 @@ image: Visual Studio 2017
 configuration: Release
 platform: ARM
 
+# Переключаем режим сборки на Script — иначе AppVeyor ищет .sln в корне
+build: off
+
 environment:
-  PROJECT_DIR: c:\projects\TelegramWP10
+  PROJECT_DIR: c:\projects\tdlib-wp10
   MSBUILD: C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin\MSBuild.exe
   SIGNTOOL: C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x86\signtool.exe
   CERT_PUBLISHER: CN=TelegramWP10
-  CERT_PFX: c:\projects\TelegramWP10\sign\TelegramWP10.pfx
+  CERT_PFX: c:\projects\tdlib-wp10\sign\TelegramWP10.pfx
   # CERT_PASSWORD: задай в AppVeyor UI -> Settings -> Environment -> Secure
 
 install:
   - set Platform=
   - set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin;%PATH%
-  - git clone https://github.com/nallion/tdlib_wp10 %PROJECT_DIR%
   - cd /d %PROJECT_DIR%
   - nuget restore TelegramWP10.sln
 
