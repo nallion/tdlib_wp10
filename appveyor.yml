@@ -13,9 +13,9 @@ install:
   - git clone https://github.com/tdlib/td.git %PROJECT_DIR%
   - cd %PROJECT_DIR%
   - git submodule update --init --recursive
-#  - choco install gperf -y
-#  - choco install strawberryperl -y
-#  - choco install php -y
+  - choco install gperf -y
+  - choco install strawberryperl -y
+  - choco install php -y
   - set PATH=C:\Strawberry\perl\bin;C:\tools\php83;%PATH%
   # Install vcpkg
   - rd /s /q C:\tools\vcpkg
