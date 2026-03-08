@@ -19,7 +19,7 @@
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WindowsAppContainer>true</WindowsAppContainer>
-    <RestorePackages>true</RestorePackages>
+    <NugetTargetMoniker>UAP,Version=v10.0.10240</NugetTargetMoniker>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|ARM'">
@@ -79,4 +79,11 @@
 
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
   <Import Project="..\packages\Microsoft.NETCore.UniversalWindowsPlatform.6.2.14\build\Microsoft.NETCore.UniversalWindowsPlatform.targets" Condition="Exists('..\packages\Microsoft.NETCore.UniversalWindowsPlatform.6.2.14\build\Microsoft.NETCore.UniversalWindowsPlatform.targets')" />
+
+  <ItemGroup>
+    <Reference Include="System.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <HintPath>..\packages\Microsoft.NETCore.UniversalWindowsPlatform.6.2.14\ref\uap10.0.10240\System.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
 </Project>
