@@ -20,7 +20,7 @@ install:
   - choco install gperf -y
   - choco install strawberryperl -y
   - choco install php -y
-  - set PATH=C:\Strawberry\perl\bin;C:\tools\php83;%PATH%
+  - set PATH=C:\Strawberry\perl\bin;C:\tools\php83;C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin;%PATH%
   # Install vcpkg
   - rd /s /q C:\tools\vcpkg
   - git clone https://github.com/microsoft/vcpkg.git C:\tools\vcpkg
