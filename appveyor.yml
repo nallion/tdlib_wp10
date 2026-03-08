@@ -10,7 +10,7 @@ environment:
   CERT_PUBLISHER: CN=TelegramWP10
   CERT_PFX: c:\projects\tdlib-wp10\sign\TelegramWP10.pfx
   CERT_PASSWORD: "1234"
-  UWP_TARGETS: C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\Microsoft\WindowsXaml\v15.0\Microsoft.Windows.UI.Xaml.CSharp.Targets
+  UWP_TARGETS_DIR: C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\Microsoft\WindowsXaml\v15.0
 
 install:
   - set Platform=
@@ -22,13 +22,19 @@ before_build:
   - mkdir %PROJECT_DIR%\sign
   - ps: $cert = New-SelfSignedCertificate -Type Custom -Subject $env:CERT_PUBLISHER -KeyUsage DigitalSignature -FriendlyName "TelegramWP10" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}"); $pwd = ConvertTo-SecureString -String $env:CERT_PASSWORD -Force -AsPlainText; Export-PfxCertificate -Cert $cert -FilePath $env:CERT_PFX -Password $pwd; Write-Host "Certificate generated:" $cert.Thumbprint
 
-  # Диагностика: смотрим что внутри UWP targets — ищем Import и CSharp.targets
+  # Диагностика: смотрим что внутри Common.targets и ищем RedirectionTarget
   - ps: |
-      Write-Host "=== Imports inside UWP Targets ==="
-      Select-String -Path $env:UWP_TARGETS -Pattern "Import|CSharp|WinFx" | ForEach-Object { Write-Host $_.Line.Trim() }
+      $dir = $env:UWP_TARGETS_DIR
+      Write-Host "=== Files in UWP targets dir ==="
+      Get-ChildItem $dir | ForEach-Object { Write-Host $_.Name }
+      Write-Host "=== RedirectionTarget in Common.targets ==="
+      Select-String -Path "$dir\Microsoft.Windows.UI.Xaml.Common.targets" -Pattern "RedirectionTarget|Import" | ForEach-Object { Write-Host $_.Line.Trim() }
+      Write-Host "=== All .targets/.props files (lowercase) in dir ==="
+      Get-ChildItem $dir -Filter "*.targets" | ForEach-Object { Write-Host $_.Name }
+      Get-ChildItem $dir -Filter "*.props" | ForEach-Object { Write-Host $_.Name }
 
   - ps: |
-      $t = $env:UWP_TARGETS
+      $t = "$env:UWP_TARGETS_DIR\Microsoft.Windows.UI.Xaml.CSharp.Targets"
       $xml = '<?xml version="1.0" encoding="utf-8"?>'
       $xml += '<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'
       $xml += '<Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists(''$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props'')" />'
