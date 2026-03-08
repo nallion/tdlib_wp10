@@ -2,16 +2,12 @@ image: Visual Studio 2017
 platform: ARM
 configuration: Release
 
-# Отключаем автоматическую сборку, чтобы использовать свой скрипт
-build: off
+before_build:
+  - nuget restore TelegramWP10.sln
 
 build_script:
-  # Восстанавливаем пакеты NuGet
-  - nuget restore TelegramWP10.sln
-  # Запускаем MSBuild вручную с правильными флагами
   - msbuild TelegramWP10.sln /p:Configuration=Release /p:Platform=ARM /p:AppxPackageSigningEnabled=false /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxBundle=Never /m
 
 artifacts:
-  # Путь к готовому файлу .appx
   - path: 'TelegramWP10\bin\ARM\Release\TelegramWP10.appx'
     name: Telegram_ARM_Package
