@@ -9,7 +9,6 @@ environment:
   PROJECT_DIR: c:\projects\td
 
 install:
-  - msbuild.exe
   - echo %VSCMD_ARG_TGT_ARCH%
   - echo %Platform%
   - echo %VCPKG_DEFAULT_TRIPLET%
