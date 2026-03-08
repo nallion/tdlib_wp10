@@ -17,8 +17,11 @@ install:
   - choco install strawberryperl -y
   - choco install php -y
   - set PATH=C:\Strawberry\perl\bin;C:\tools\php83;%PATH%
+  # Install vcpkg
+  - rd /s /q C:\tools\vcpkg
+  - git clone https://github.com/microsoft/vcpkg.git C:\tools\vcpkg
   - cd C:\tools\vcpkg
-  - git checkout 5568f110d0ab6b0cbcdad4ff174b27d2b5f1e494
+  - git checkout 2019.09.12
   - .\bootstrap-vcpkg.bat
   # Устанавливаем зависимости и для ARM (основная сборка) и для x64 (нативные инструменты)
   - vcpkg install zlib:%VCPKG_TARGET_TRIPLET% openssl:%VCPKG_TARGET_TRIPLET% --clean-after-build
