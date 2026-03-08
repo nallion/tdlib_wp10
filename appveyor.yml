@@ -6,6 +6,8 @@ build: off
 environment:
   PROJECT_DIR: c:\projects\tdlib-wp10
   MSBUILD: C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin\MSBuild.exe
+  # Абсолютный путь к UWP targets в VS2017
+  UWP_TARGETS: C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\Microsoft\WindowsXaml\v15.0\Microsoft.Windows.UI.Xaml.CSharp.targets
   SIGNTOOL: C:\Program Files (x86)\Windows Kits\10\bin\10.0.16299.0\x86\signtool.exe
   CERT_PUBLISHER: CN=TelegramWP10
   CERT_PFX: c:\projects\tdlib-wp10\sign\TelegramWP10.pfx
@@ -32,122 +34,139 @@ before_build:
       Export-PfxCertificate -Cert $cert -FilePath $env:CERT_PFX -Password $pwd;
       Write-Host "Certificate generated:" $cert.Thumbprint
 
-  # ГЛАВНЫЙ ФИКС: перезаписываем TelegramClient.csproj правильным UWP-файлом
-  # Это обходит любые проблемы с Git — файл всегда будет правильным
+  # Диагностика: найдём реальный путь к UWP targets в этой системе
   - ps: |
-      $csproj = @'
-      <?xml version="1.0" encoding="utf-8"?>
-      <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-        <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"
-                Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
-        <PropertyGroup>
-          <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-          <Platform Condition=" '$(Platform)' == '' ">ARM</Platform>
-          <ProjectGuid>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</ProjectGuid>
-          <OutputType>AppContainerExe</OutputType>
-          <AppDesignerFolder>Properties</AppDesignerFolder>
-          <RootNamespace>TelegramClient</RootNamespace>
-          <AssemblyName>TelegramClient</AssemblyName>
-          <DefaultLanguage>ru-RU</DefaultLanguage>
-          <TargetPlatformVersion>10.0.16299.0</TargetPlatformVersion>
-          <TargetPlatformMinVersion>10.0.10586.0</TargetPlatformMinVersion>
-          <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
-          <FileAlignment>512</FileAlignment>
-          <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
-          <PackageCertificateKeyFile>TelegramClient_TemporaryKey.pfx</PackageCertificateKeyFile>
-          <AppxPackage>true</AppxPackage>
-        </PropertyGroup>
-        <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|ARM'">
-          <DebugSymbols>true</DebugSymbols>
-          <OutputPath>bin\ARM\Debug\</OutputPath>
-          <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
-          <Optimize>false</Optimize>
-          <DebugType>full</DebugType>
-        </PropertyGroup>
-        <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|ARM'">
-          <OutputPath>bin\ARM\Release\</OutputPath>
-          <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
-          <Optimize>true</Optimize>
-          <DebugType>pdbonly</DebugType>
-        </PropertyGroup>
-        <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
-          <DebugSymbols>true</DebugSymbols>
-          <OutputPath>bin\x64\Debug\</OutputPath>
-          <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
-          <Optimize>false</Optimize>
-          <DebugType>full</DebugType>
-        </PropertyGroup>
-        <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
-          <OutputPath>bin\x64\Release\</OutputPath>
-          <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
-          <Optimize>true</Optimize>
-          <DebugType>pdbonly</DebugType>
-        </PropertyGroup>
-        <ItemGroup>
-          <Reference Include="Newtonsoft.Json">
-            <HintPath>..\packages\Newtonsoft.Json.10.0.3\lib\portable-net45+win8+wp8+wpa81\Newtonsoft.Json.dll</HintPath>
-          </Reference>
-        </ItemGroup>
-        <ItemGroup>
-          <Page Include="App.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <SubType>Designer</SubType>
-          </Page>
-          <Page Include="LoginPage.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <SubType>Designer</SubType>
-          </Page>
-          <Page Include="ChatsPage.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <SubType>Designer</SubType>
-          </Page>
-          <Page Include="ChatPage.xaml">
-            <Generator>MSBuild:Compile</Generator>
-            <SubType>Designer</SubType>
-          </Page>
-        </ItemGroup>
-        <ItemGroup>
-          <Compile Include="App.xaml.cs">
-            <DependentUpon>App.xaml</DependentUpon>
-          </Compile>
-          <Compile Include="LoginPage.xaml.cs">
-            <DependentUpon>LoginPage.xaml</DependentUpon>
-          </Compile>
-          <Compile Include="ChatsPage.xaml.cs">
-            <DependentUpon>ChatsPage.xaml</DependentUpon>
-          </Compile>
-          <Compile Include="ChatPage.xaml.cs">
-            <DependentUpon>ChatPage.xaml</DependentUpon>
-          </Compile>
-          <Compile Include="TdService.cs" />
-          <Compile Include="Properties\AssemblyInfo.cs" />
-        </ItemGroup>
-        <ItemGroup>
-          <AppxManifest Include="Package.appxmanifest">
-            <SubType>Designer</SubType>
-          </AppxManifest>
-        </ItemGroup>
-        <ItemGroup>
-          <Content Include="Assets\StoreLogo.png" />
-          <Content Include="Assets\SplashScreen.png" />
-          <Content Include="Assets\Square150x150Logo.png" />
-          <Content Include="Assets\Square44x44Logo.png" />
-          <Content Include="Assets\Wide310x150Logo.png" />
-        </ItemGroup>
-        <ItemGroup>
-          <ProjectReference Include="..\TdLib.Wrapper\TdLib.Wrapper.vcxproj">
-            <Project>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</Project>
-            <n>TdLib.Wrapper</n>
-          </ProjectReference>
-        </ItemGroup>
-        <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
-      </Project>
-      '@
+      Write-Host "=== Searching for UWP targets ==="
+      Get-ChildItem "C:\Program Files (x86)" -Recurse -Filter "Microsoft.Windows.UI.Xaml.CSharp.targets" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+      Write-Host "=== MSBuildExtensionsPath ==="
+      & "$env:MSBUILD" /version
+      Write-Host "=== VisualStudioVersion ==="
+      (Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\VisualStudio\SxS\VS7" -ErrorAction SilentlyContinue)
+
+  # Перезаписываем csproj с АБСОЛЮТНЫМ путём к targets
+  - ps: |
+      # Находим реальный путь к targets
+      $targetsFile = Get-ChildItem "C:\Program Files (x86)" -Recurse -Filter "Microsoft.Windows.UI.Xaml.CSharp.targets" -ErrorAction SilentlyContinue | Select-Object -First 1
+      if (-not $targetsFile) {
+        Write-Error "UWP targets NOT FOUND on this machine!"
+        exit 1
+      }
+      $targetsPath = $targetsFile.FullName
+      Write-Host "Found targets: $targetsPath"
+
+      $csproj = @"
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="`$(MSBuildExtensionsPath)\`$(MSBuildToolsVersion)\Microsoft.Common.props"
+          Condition="Exists('`$(MSBuildExtensionsPath)\`$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '`$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '`$(Platform)' == '' ">ARM</Platform>
+    <ProjectGuid>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</ProjectGuid>
+    <OutputType>AppContainerExe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>TelegramClient</RootNamespace>
+    <AssemblyName>TelegramClient</AssemblyName>
+    <DefaultLanguage>ru-RU</DefaultLanguage>
+    <TargetPlatformVersion>10.0.16299.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.10586.0</TargetPlatformMinVersion>
+    <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
+    <FileAlignment>512</FileAlignment>
+    <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <PackageCertificateKeyFile>TelegramClient_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <AppxPackage>true</AppxPackage>
+  </PropertyGroup>
+  <PropertyGroup Condition="'`$(Configuration)|`$(Platform)' == 'Debug|ARM'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\ARM\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <Optimize>false</Optimize>
+    <DebugType>full</DebugType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'`$(Configuration)|`$(Platform)' == 'Release|ARM'">
+    <OutputPath>bin\ARM\Release\</OutputPath>
+    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'`$(Configuration)|`$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <Optimize>false</Optimize>
+    <DebugType>full</DebugType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'`$(Configuration)|`$(Platform)' == 'Release|x64'">
+    <OutputPath>bin\x64\Release\</OutputPath>
+    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.10.0.3\lib\portable-net45+win8+wp8+wpa81\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Page Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="LoginPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ChatsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ChatPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="App.xaml.cs">
+      <DependentUpon>App.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="LoginPage.xaml.cs">
+      <DependentUpon>LoginPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ChatsPage.xaml.cs">
+      <DependentUpon>ChatsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ChatPage.xaml.cs">
+      <DependentUpon>ChatPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="TdService.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\SplashScreen.png" />
+    <Content Include="Assets\Square150x150Logo.png" />
+    <Content Include="Assets\Square44x44Logo.png" />
+    <Content Include="Assets\Wide310x150Logo.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TdLib.Wrapper\TdLib.Wrapper.vcxproj">
+      <Project>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</Project>
+      <n>TdLib.Wrapper</n>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$targetsPath" />
+</Project>
+"@
       $path = "$env:PROJECT_DIR\TelegramClient\TelegramClient.csproj"
       [System.IO.File]::WriteAllText($path, $csproj, [System.Text.Encoding]::UTF8)
-      Write-Host "Wrote correct UWP csproj to: $path"
-      # Проверяем что записалось правильно
-      Select-String "WindowsXaml|WinFx" $path
+      Write-Host "Written csproj with absolute targets path: $targetsPath"
+      # Финальная проверка
+      Select-String "Import Project" $path
 
 build_script:
   - set Platform=
@@ -156,15 +175,14 @@ build_script:
 
 after_build:
   - ps: |
-      $bundle = Get-ChildItem -Recurse -Filter "*.appxbundle" "$env:PROJECT_DIR" | Select-Object -First 1
+      $bundle = Get-ChildItem -Recurse -Filter "*.appxbundle" "$env:PROJECT_DIR" -ErrorAction SilentlyContinue | Select-Object -First 1
       if ($bundle) {
-        $dest = "c:\projects\TelegramWP10_signed.appxbundle"
-        Copy-Item $bundle.FullName $dest
-        Write-Host "Bundle copied to: $dest"
+        Copy-Item $bundle.FullName "c:\projects\TelegramWP10.appxbundle"
+        Write-Host "Bundle: $($bundle.FullName)"
       } else {
-        Write-Warning "No .appxbundle found!"
+        Write-Warning "No .appxbundle found"
       }
 
 artifacts:
-  - path: c:\projects\TelegramWP10_signed.appxbundle
+  - path: c:\projects\TelegramWP10.appxbundle
     name: TelegramWP10
