@@ -46,84 +46,63 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="App.xaml.cs">
-      <DependentUpon>App.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="MainPage.xaml.cs">
-      <DependentUpon>MainPage.xaml</DependentUpon>
-    </Compile>
+    <Compile Include="App.xaml.cs"><DependentUpon>App.xaml</DependentUpon></Compile>
+    <Compile Include="MainPage.xaml.cs"><DependentUpon>MainPage.xaml</DependentUpon></Compile>
     <Compile Include="TdJson.cs" />
     <Compile Include="ChatItem.cs" />
     <Compile Include="MessageItem.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <AppxManifest Include="Package.appxmanifest">
-      <SubType>Designer</SubType>
-    </AppxManifest>
+    <AppxManifest Include="Package.appxmanifest"><SubType>Designer</SubType></AppxManifest>
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Square150x150Logo.png" />
     <Content Include="Assets\Square44x44Logo.png" />
-    <Content Include="tdjson.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="ssleay32.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="libeay32.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="zlib1.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <Content Include="tdjson.dll"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="ssleay32.dll"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="libeay32.dll"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="zlib1.dll"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
   </ItemGroup>
 
   <ItemGroup>
-    <ApplicationDefinition Include="App.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </ApplicationDefinition>
-    <Page Include="MainPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
+    <ApplicationDefinition Include="App.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></ApplicationDefinition>
+    <Page Include="MainPage.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
   </ItemGroup>
 
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
 
-  <Target Name="PostBuildSign" AfterTargets="GenerateAppxPackage">
+  <Target Name="HardSignAppx" AfterTargets="AfterBuild">
     <PropertyGroup>
       <CertFile>$(ProjectDir)MyTempCert.pfx</CertFile>
       <CertPass>12345</CertPass>
       
-      <SdkPath Condition="Exists('C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\')">C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\</SdkPath>
-      <SdkPath Condition="'$(SdkPath)' == ''">C:\Program Files (x86)\Windows Kits\10\bin\x86\</SdkPath>
+      <WinSDKPath>C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\</WinSDKPath>
+      <WinSDKPath Condition="!Exists('$(WinSDKPath)')">C:\Program Files (x86)\Windows Kits\10\bin\x86\</WinSDKPath>
       
-      <SignToolCmd>"$(SdkPath)signtool.exe"</SignToolCmd>
-      <MakeCertCmd>"$(SdkPath)makecert.exe"</MakeCertCmd>
-      <Pvk2PfxCmd>"$(SdkPath)pvk2pfx.exe"</Pvk2PfxCmd>
+      <SignToolCmd>"$(WinSDKPath)signtool.exe"</SignToolCmd>
+      <MakeCertCmd>"$(WinSDKPath)makecert.exe"</MakeCertCmd>
+      <Pvk2PfxCmd>"$(WinSDKPath)pvk2pfx.exe"</Pvk2PfxCmd>
       
-      <AppxOutputDir>C:\projects\tdlib-wp10\AppPackages</AppxOutputDir>
+      <SearchDir>C:\projects\tdlib-wp10\AppPackages</SearchDir>
     </PropertyGroup>
 
     <ItemGroup>
-      <FilesToSign Include="$(AppxOutputDir)\**\*.appx" />
-      <FilesToSign Include="$(AppxOutputDir)\**\*.appxbundle" />
+      <AppxToSign Include="$(SearchDir)\**\*.appx" />
     </ItemGroup>
 
-    <Message Importance="High" Text="--- ФИНАЛЬНАЯ ПОДПИСЬ ПАКЕТОВ ---" />
-    <Message Importance="High" Text="Поиск в: $(AppxOutputDir)" />
+    <Message Importance="High" Text="--- КРИТИЧЕСКАЯ ПОДПИСЬ ПАКЕТОВ ---" />
+    <Message Importance="High" Text="Поиск файлов в: $(SearchDir)" />
 
     <Exec Condition="!Exists('$(CertFile)')" 
           Command="$(MakeCertCmd) -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)TempCert.cer&quot; &amp;&amp; $(Pvk2PfxCmd) -pvk &quot;$(ProjectDir)TempCert.pvk&quot; -spc &quot;$(ProjectDir)TempCert.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" />
 
-    <Exec Command="$(SignToolCmd) sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(FilesToSign.Identity)&quot;" 
-          Condition="'@(FilesToSign)' != ''" />
+    <Message Importance="High" Text="Подписываю файл: %(AppxToSign.FullPath)" Condition="'@(AppxToSign)' != ''" />
+    <Exec Command="$(SignToolCmd) sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(AppxToSign.FullPath)&quot;" 
+          Condition="'@(AppxToSign)' != ''" />
     
-    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА (Подписано файлов: @(FilesToSign->Count())) ---" />
+    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА. ПОДПИСАНО: @(AppxToSign->Count()) ФАЙЛОВ ---" />
   </Target>
-
 </Project>
