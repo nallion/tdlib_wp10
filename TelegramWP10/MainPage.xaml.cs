@@ -330,8 +330,8 @@ namespace TelegramWP10
                                 if (_currentChatId == retryChat)
                                     TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + retryChat + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
                             }));
-                        // Если хоть что-то есть — показываем пока что
-                        if (gotCount == 0) break;
+                        // Не показываем частичный результат — ждём полного
+                        break;
                     }
                     _messageItems.Clear();
                     for (int i = msgs.Count - 1; i >= 0; i--) {
