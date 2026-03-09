@@ -213,8 +213,11 @@ namespace TelegramWP10
                         }
                     }
                     Log("rendered " + _messageItems.Count + " messages");
-                    if (_messageItems.Count > 0)
-                        MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
+                    // Задержка нужна чтобы ListView успел отрендерить все элементы до скролла
+                    var ignored2 = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => {
+                        if (_messageItems.Count > 0)
+                            MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
+                    });
                     break;
             }
         }

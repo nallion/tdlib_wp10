@@ -54,6 +54,12 @@
             </StackPanel>
 
             <ListView x:Name="MessagesListView" Grid.Row="1" SelectionMode="None" Padding="10" IsItemClickEnabled="True" ItemClick="MessagesListView_ItemClick">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Padding" Value="0"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate>
                         <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}">
