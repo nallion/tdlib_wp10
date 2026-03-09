@@ -35,12 +35,12 @@ namespace TelegramWP10
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v6",
-                ["files_directory"] = path + "/td_files_v6",
+                ["database_directory"] = path + "/td_db_v7",
+                ["files_directory"] = path + "/td_files_v7",
                 ["api_id"] = 26688287, // ЗАМЕНИ НА СВОЙ
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b", // ЗАМЕНИ НА СВОЙ
                 ["system_language_code"] = "ru",
-                ["device_model"] = "Lumia",
+                ["device_model"] = "Lumia UWP",
                 ["application_version"] = "1.0"
             };
             TdJson.SendUtf8(_client, p.ToString());
@@ -104,7 +104,7 @@ namespace TelegramWP10
                     }
                     break;
 
-                case "messages": // Это ответ на getChatHistory
+                case "messages": 
                     var msgs = update["messages"];
                     if (msgs != null) {
                         _messageItems.Clear();
@@ -137,7 +137,7 @@ namespace TelegramWP10
                     Id = (long)msg["id"],
                     Text = txt,
                     Alignment = (bool)msg["is_outgoing"] ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                    Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#444444"
+                    Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
                 };
             } catch { return null; }
         }
@@ -156,7 +156,7 @@ namespace TelegramWP10
                 ["chat_id"] = _currentChatId,
                 ["from_message_id"] = 0,
                 ["offset"] = 0,
-                ["limit"] = 30,
+                ["limit"] = 40,
                 ["only_local"] = false
             };
             TdJson.SendUtf8(_client, h.ToString());
@@ -164,8 +164,7 @@ namespace TelegramWP10
 
         private void SendMessage_Click(object sender, RoutedEventArgs e)
         {
-            string text = MessageInput.Text;
-            if (string.IsNullOrWhiteSpace(text) || _currentChatId == 0) return;
+            if (string.IsNullOrWhiteSpace(MessageInput.Text) || _currentChatId == 0) return;
 
             JObject req = new JObject {
                 ["@type"] = "sendMessage",
@@ -174,7 +173,7 @@ namespace TelegramWP10
                     ["@type"] = "inputMessageText",
                     ["text"] = new JObject {
                         ["@type"] = "formattedText",
-                        ["text"] = text
+                        ["text"] = MessageInput.Text
                     }
                 }
             };
@@ -196,7 +195,7 @@ namespace TelegramWP10
             TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
     }
 
-    // ИСПРАВЛЕННЫЙ КЛАСС ДЛЯ РАБОТЫ С UTF-8
+    // ВАЖНО: Вся логика DLL здесь, другие файлы с классом TdJson нужно удалить!
     public static class TdJson {
         [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr td_json_client_create();

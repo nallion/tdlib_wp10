@@ -7,8 +7,8 @@
 
     <Grid>
         <StackPanel x:Name="StartPanel" Padding="20">
-            <TextBlock x:Name="StatusText" Text="Статус: Ожидание..." Foreground="Gray" FontSize="14"/>
-            <TextBlock x:Name="DebugText" Text="Debug: -" Foreground="Yellow" FontSize="10" TextWrapping="Wrap" Margin="0,5"/>
+            <TextBlock x:Name="StatusText" Text="Загрузка..." Foreground="Gray" FontSize="14"/>
+            <TextBlock x:Name="DebugText" Text="Logs: -" Foreground="Yellow" FontSize="10" TextWrapping="Wrap" Margin="0,5"/>
 
             <StackPanel x:Name="LoginPanel" Visibility="Collapsed">
                 <TextBox x:Name="PhoneInput" Header="Телефон" PlaceholderText="+7..." InputScope="TelephoneNumber"/>
@@ -17,12 +17,12 @@
                 <Button x:Name="CodeButton" Content="Войти" Click="SendCode_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
             </StackPanel>
 
-            <ListView x:Name="ChatListView" Height="580" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
+            <ListView x:Name="ChatListView" Height="550" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:ChatItem">
                         <Grid Margin="0,10">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="60"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Ellipse Width="50" Height="50">
@@ -30,7 +30,7 @@
                                     <ImageBrush ImageSource="{Binding Photo}"/>
                                 </Ellipse.Fill>
                             </Ellipse>
-                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="15,0" FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="5,0" FontSize="18" FontWeight="Bold"/>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
@@ -45,7 +45,7 @@
             </Grid.RowDefinitions>
             
             <StackPanel Orientation="Horizontal" Background="#0088cc" Padding="10">
-                <Button Content="←" Click="BackButton_Click" Foreground="White" FontSize="20" Background="Transparent"/>
+                <Button Content="←" Click="BackButton_Click" Foreground="White" Background="Transparent" FontSize="20"/>
                 <TextBlock x:Name="CurrentChatTitle" Text="Чат" Foreground="White" FontSize="18" VerticalAlignment="Center" Margin="10,0"/>
             </StackPanel>
             
@@ -64,7 +64,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="MessageInput" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="80"/>
+                <TextBox x:Name="MessageInput" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="100"/>
                 <Button Grid.Column="1" Content="➤" Click="SendMessage_Click" Margin="10,0,0,0" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
             </Grid>
         </Grid>
