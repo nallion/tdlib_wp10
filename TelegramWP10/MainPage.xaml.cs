@@ -213,7 +213,9 @@ namespace TelegramWP10
                         }
                     }
                     Log("rendered " + _messageItems.Count + " messages");
-                    // Задержка нужна чтобы ListView успел отрендерить все элементы до скролла
+                    // Показываем список только когда сообщения загружены
+                    LoadingIndicator.Visibility = Visibility.Collapsed;
+                    MessagesListView.Visibility = Visibility.Visible;
                     var ignored2 = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => {
                         if (_messageItems.Count > 0)
                             MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
@@ -323,12 +325,15 @@ namespace TelegramWP10
             if (chat.Id == _currentChatId) return;
             _currentChatId = chat.Id;
             _pendingHistoryChatId = chat.Id;
-            CurrentChatTitle.Text = chat.Title;
             _messageItems.Clear();
             _messagesDict.Clear();
             _fileToMsgId.Clear();
+            // Показываем панель чата с индикатором загрузки, но список сообщений ещё скрыт
             StartPanel.Visibility = Visibility.Collapsed;
             MessagesPanel.Visibility = Visibility.Visible;
+            CurrentChatTitle.Text = chat.Title;
+            LoadingIndicator.Visibility = Visibility.Visible;
+            MessagesListView.Visibility = Visibility.Collapsed;
             Log("OPEN CHAT id=" + _currentChatId + " title=" + chat.Title);
             TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
         }
@@ -369,6 +374,8 @@ namespace TelegramWP10
         private void BackButton_Click(object sender, RoutedEventArgs e) {
             _currentChatId = 0;
             _pendingHistoryChatId = 0;
+            LoadingIndicator.Visibility = Visibility.Collapsed;
+            MessagesListView.Visibility = Visibility.Visible;
             MessagesPanel.Visibility = Visibility.Collapsed;
             StartPanel.Visibility = Visibility.Visible;
         }
