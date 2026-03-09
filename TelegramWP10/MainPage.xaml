@@ -60,15 +60,23 @@
                                 </Grid.RowDefinitions>
                                 <!-- Строка 1: название + время -->
                                 <Grid Grid.Row="0">
-                                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="200" VerticalAlignment="Center" HorizontalAlignment="Left"/>
                                     <TextBlock Text="{Binding LastMessageTime}" Foreground="#888888" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                 </Grid>
-                                <!-- Строка 2: последнее сообщение + галочки -->
+                                <!-- Строка 2: последнее сообщение + бейдж непрочитанных -->
                                 <Grid Grid.Row="1" Margin="0,2,0,0">
-                                    <TextBlock Text="{Binding LastMessage}" Foreground="#888888" FontSize="13" TextTrimming="CharacterEllipsis" Margin="0,0,30,0"/>
+                                    <TextBlock Text="{Binding LastMessage}" Foreground="#888888" FontSize="13" TextTrimming="CharacterEllipsis" Margin="0,0,40,0"/>
+                                    <!-- Галочки для исходящих -->
                                     <TextBlock Text="{Binding StatusText}" Foreground="#0088cc" FontSize="13"
                                                HorizontalAlignment="Right" VerticalAlignment="Center"
                                                Visibility="{Binding StatusVisibility}"/>
+                                    <!-- Бейдж непрочитанных для входящих -->
+                                    <Border Background="#0088cc" CornerRadius="10" MinWidth="20" Height="20"
+                                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            Visibility="{Binding UnreadVisibility}" Padding="4,0">
+                                        <TextBlock Text="{Binding UnreadText}" Foreground="White" FontSize="11"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
                                 </Grid>
                             </Grid>
                         </Grid>

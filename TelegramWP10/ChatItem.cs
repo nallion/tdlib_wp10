@@ -58,6 +58,15 @@ namespace TelegramWP10
         }
         public string OnlineVisibility => IsOnline ? "Visible" : "Collapsed";
 
+        private int _unreadCount = 0;
+        public int UnreadCount
+        {
+            get => _unreadCount;
+            set { _unreadCount = value; OnPropertyChanged("UnreadCount"); OnPropertyChanged("UnreadVisibility"); OnPropertyChanged("UnreadText"); }
+        }
+        public string UnreadVisibility => _unreadCount > 0 ? "Visible" : "Collapsed";
+        public string UnreadText => _unreadCount > 99 ? "99+" : _unreadCount.ToString();
+
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string propertyName)
         {

@@ -189,6 +189,8 @@ namespace TelegramWP10
                     // Заполняем последнее сообщение
                     var lastMsg = c["last_message"];
                     if (lastMsg != null) FillChatLastMessage(chatItem, lastMsg, c);
+                    // Непрочитанные
+                    chatItem.UnreadCount = c["unread_count"]?.ToObject<int>() ?? 0;
                     var phSmall = c["photo"]?["small"];
                     if (phSmall != null) {
                         long phFileId = (long)phSmall["id"];
@@ -287,6 +289,12 @@ namespace TelegramWP10
                         FillChatLastMessage(_chatsDict[ulcId], ulcMsg, update);
                     break;
 
+                case "updateChatReadInbox":
+                    long ucriId = update["chat_id"]?.ToObject<long>() ?? 0;
+                    if (ucriId != 0 && _chatsDict.ContainsKey(ucriId))
+                        _chatsDict[ucriId].UnreadCount = update["unread_count"]?.ToObject<int>() ?? 0;
+                    break;
+
                 case "updateChatReadOutbox":
                     long ucrId = update["chat_id"]?.ToObject<long>() ?? 0;
                     if (ucrId != 0 && _chatsDict.ContainsKey(ucrId))
@@ -312,13 +320,18 @@ namespace TelegramWP10
                     var msgs = update["messages"] as JArray;
                     Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
+                    // TDLib шлёт пустой messages когда данных нет в кэше — повторяем запрос
+                    if (msgs == null || msgs.Count == 0) {
+                        Log("messages empty — retrying getChatHistory");
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
+                        break;
+                    }
                     _messageItems.Clear();
                     for (int i = msgs.Count - 1; i >= 0; i--) {
                         var item = ParseMessage(msgs[i]);
                         if (item != null) _messageItems.Add(item);
                     }
                     Log("rendered " + _messageItems.Count + " messages");
-                    // Показываем список только когда сообщения загружены
                     _isLoadingHistory = false;
                     LoadingIndicator.Visibility = Visibility.Collapsed;
                     MessagesListView.Visibility = Visibility.Visible;
@@ -466,6 +479,9 @@ namespace TelegramWP10
             LoadingIndicator.Visibility = Visibility.Visible;
             MessagesListView.Visibility = Visibility.Collapsed;
             Log("OPEN CHAT id=" + _currentChatId + " title=" + chat.Title);
+            // Сбрасываем счётчик непрочитанных
+            if (_chatsDict.ContainsKey(_currentChatId))
+                _chatsDict[_currentChatId].UnreadCount = 0;
             TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
         }
 
