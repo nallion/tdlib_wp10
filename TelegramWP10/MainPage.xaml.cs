@@ -27,24 +27,25 @@ namespace TelegramWP10
             _client = TdJson.td_json_client_create();
             ChatListView.ItemsSource = _chatListItems;
             MessagesListView.ItemsSource = _messageItems;
-            Task.Run(() => LongPolling());
-            SendParameters();
+            InitAsync();
         }
 
-        private async void SendParameters() {
-            // Создаём папку через WinRT API — TDLib не может сам создать папку в DocumentsLibrary
+        private async void InitAsync() {
+            await SendParameters();
+            Task.Run(() => LongPolling());
+        }
+
+        private async Task SendParameters() {
             string path;
             try {
                 var folder = await Windows.Storage.KnownFolders.DocumentsLibrary
                     .CreateFolderAsync("TelegramWP10", Windows.Storage.CreationCollisionOption.OpenIfExists);
                 path = folder.Path.Replace("\\", "/");
             } catch (Exception ex) {
-                // Сообщаем пользователю что нет доступа к Documents
                 var dialog = new Windows.UI.Popups.MessageDialog(
                     "Нет доступа к папке Документы.\nСессия не будет сохраняться между переустановками.\n\nОшибка: " + ex.Message,
                     "Внимание");
                 await dialog.ShowAsync();
-                // Fallback на LocalFolder
                 path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
             }
             JObject p = new JObject {
