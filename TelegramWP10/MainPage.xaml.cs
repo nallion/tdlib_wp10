@@ -43,7 +43,7 @@ namespace TelegramWP10
             string path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
-                ["use_test_dc"] = true,
+                ["use_test_dc"] = false,
                 ["database_directory"] = path + "/td_db_v40", 
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
