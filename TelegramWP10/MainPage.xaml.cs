@@ -32,19 +32,12 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var devices = Windows.Storage.KnownFolders.RemovableDevices;
-                var folders = await devices.GetFoldersAsync();
-                if (folders.Count == 0) {
-                    await ShowError("SD карта не найдена. Вставьте карту памяти и перезапустите приложение.");
-                    return;
-                }
-                var sdCard = folders[0];
-                LoginStatus.Text = "SD карта найдена: " + sdCard.Path;
-                var appFolder = await sdCard.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
+                var appFolder = await Windows.Storage.KnownFolders.MusicLibrary
+                    .CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
-                LoginStatus.Text = "База данных: " + _dbPath;
+                LoginStatus.Text = "База: " + _dbPath;
             } catch (Exception ex) {
-                await ShowError("Ошибка доступа к SD карте:\n" + ex.Message + "\n\nТип: " + ex.GetType().Name);
+                await ShowError("Ошибка доступа к хранилищу:\n" + ex.Message + "\n\nТип: " + ex.GetType().Name);
                 return;
             }
             Task.Run(() => LongPolling());
