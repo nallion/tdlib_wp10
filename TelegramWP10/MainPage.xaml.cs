@@ -6,7 +6,6 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media.Imaging;
 using Windows.Storage;
-using Windows.ApplicationModel.DataTransfer;
 using Newtonsoft.Json.Linq;
 
 namespace TelegramWP10
@@ -25,7 +24,6 @@ namespace TelegramWP10
         public MainPage()
         {
             this.InitializeComponent();
-            Application.Current.UnhandledException += (s, e) => { Log("CRASH: " + e.Message); e.Handled = true; };
             _client = TdJson.td_json_client_create();
             ChatListView.ItemsSource = _chatListItems;
             MessagesListView.ItemsSource = _messageItems;
@@ -33,18 +31,13 @@ namespace TelegramWP10
             SendParameters();
         }
 
-        private void Log(string m) {
-            var ignored = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => {
-                DebugConsole.Text = $"[{DateTime.Now:HH:mm:ss}] {m}\n" + DebugConsole.Text;
-            });
-        }
-
         private void SendParameters() {
-            string path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
+            // RoamingFolder сохраняется между переустановками в отличие от LocalFolder
+            string path = ApplicationData.Current.RoamingFolder.Path.Replace("\\", "/");
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v40", 
+                ["database_directory"] = path + "/td_db_v40",
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
@@ -59,18 +52,14 @@ namespace TelegramWP10
                 IntPtr resPtr = TdJson.td_json_client_receive(_client, 1.0);
                 if (resPtr != IntPtr.Zero) {
                     string json = TdJson.IntPtrToStringUtf8(resPtr);
-                    if (string.IsNullOrEmpty(json)) continue; // Исправление ArgumentNull
+                    if (string.IsNullOrEmpty(json)) continue;
 
                     var ignored = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                         try {
                             var update = JObject.Parse(json);
                             string type = update["@type"]?.ToString();
-                            // Глубокая отладка: логируем все входящие события кроме шумных
-                            if (type != "updateFile" && type != "updateOption" && type != "updateChatLastMessage" && type != "updateChatReadInbox" && type != "updateChatReadOutbox")
-                                Log("← " + type + ": " + json.Substring(0, Math.Min(json.Length, 300)));
-                            if (type == "error") Log("TG ERR: " + json);
                             HandleUpdate(type, update);
-                        } catch (Exception ex) { Log("JSON ERR: " + ex.Message); }
+                        } catch { }
                     });
                 }
             }
@@ -78,17 +67,6 @@ namespace TelegramWP10
 
         private void HandleUpdate(string type, JObject update) {
             switch (type) {
-                case "updateConnectionState":
-                    var connState = update["state"]?["@type"]?.ToString();
-                    Log("CONNECTION: " + connState);
-                    break;
-                case "updateOption":
-                    var optName = update["name"]?.ToString();
-                    if (optName == "is_test_dc") {
-                        bool isTest = update["value"]?["value"]?.ToObject<bool>() ?? false;
-                        Log(isTest ? "✓ ПОДКЛЮЧЕНО К ТЕСТОВОМУ DC" : "✗ ПОДКЛЮЧЕНО К БОЕВОМУ DC");
-                    }
-                    break;
                 case "updateAuthorizationState":
                     var s = update["authorization_state"]?["@type"]?.ToString();
                     if (s == "authorizationStateWaitPhoneNumber") LoginPanel.Visibility = Visibility.Visible;
@@ -97,7 +75,9 @@ namespace TelegramWP10
                     break;
                 case "updateNewChat":
                     var c = update["chat"]; long id = (long)c["id"];
-                    if (!_chatsDict.ContainsKey(id)) _chatsDict[id] = new ChatItem { Id = id, Title = c["title"]?.ToString() };
+                    if (!_chatsDict.ContainsKey(id)) {
+                        _chatsDict[id] = new ChatItem { Id = id, Title = c["title"]?.ToString() };
+                    }
                     var p = c["photo"]?["small"];
                     if (p != null) {
                         _fileToChatId[(long)p["id"]] = id;
@@ -116,11 +96,18 @@ namespace TelegramWP10
                 case "chats":
                     foreach (var cId in update["chat_ids"]) {
                         long cid = (long)cId;
-                        if (_chatsDict.ContainsKey(cid) && !_chatListItems.Contains(_chatsDict[cid])) _chatListItems.Add(_chatsDict[cid]);
+                        if (_chatsDict.ContainsKey(cid) && !_chatListItems.Contains(_chatsDict[cid]))
+                            _chatListItems.Add(_chatsDict[cid]);
+                    }
+                    // После добавления в список — обновляем аватарки для уже скачанных файлов
+                    foreach (var kv in _fileToChatId) {
+                        if (_chatsDict.ContainsKey(kv.Value) && _chatsDict[kv.Value].Photo != null
+                            && _chatsDict[kv.Value].Photo.UriSource?.Scheme != "ms-appx") {
+                            _chatsDict[kv.Value].OnPropertyChanged("Photo");
+                        }
                     }
                     break;
                 case "messages":
-                    // Fix bug 2: check that the response belongs to the current open chat
                     if (update["chat_id"] != null && (long)update["chat_id"] != _currentChatId) break;
                     _messageItems.Clear();
                     foreach (var m in update["messages"]) { var item = ParseMessage(m); if (item != null) _messageItems.Insert(0, item); }
@@ -134,7 +121,7 @@ namespace TelegramWP10
                 var content = msg["content"];
                 string type = content["@type"]?.ToString();
                 string txt = type == "messageText" ? content["text"]?["text"]?.ToString() : content["caption"]?["text"]?.ToString() ?? "";
-                
+
                 var item = new MessageItem {
                     Id = msgId, Text = txt,
                     Date = DateTimeOffset.FromUnixTimeSeconds((long)msg["date"]).LocalDateTime.ToString("HH:mm"),
@@ -142,12 +129,9 @@ namespace TelegramWP10
                     Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
                 };
 
-                // Fix bug 4: in TDLib the reply info is in msg["reply_to"]["message_id"], not msg["reply_to_message_id"]
-                long rId = 0;
                 var replyTo = msg["reply_to"];
                 if (replyTo != null && replyTo["message_id"] != null && replyTo["message_id"].Type == JTokenType.Integer)
-                    rId = (long)replyTo["message_id"];
-                item.ReplyToText = (rId != 0) ? "Ответ на сообщение" : null;
+                    item.ReplyToText = "Ответ на сообщение";
 
                 if (type == "messagePhoto") {
                     var ph = content["photo"]?["sizes"]?.Last?["photo"];
@@ -170,52 +154,52 @@ namespace TelegramWP10
                     }
                 }
 
-                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo") item.Text = "[" + type.Replace("message", "") + "]";
+                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo")
+                    item.Text = "[" + type.Replace("message", "") + "]";
                 return item;
             } catch { return null; }
         }
 
         private void ProcessFile(long fId, string path, bool ready) {
             if (ready && !string.IsNullOrEmpty(path)) {
-                Log("FILE READY id=" + fId + " path=" + path);
-                if (_fileToChatId.ContainsKey(fId)) { Log("→ UpdateAvatar chatId=" + _fileToChatId[fId]); var t = UpdateAvatar(_fileToChatId[fId], path); }
-                if (_fileToMsgId.ContainsKey(fId)) { Log("→ UpdateMsgPhoto msgId=" + _fileToMsgId[fId]); var t = UpdateMessagePhoto(_fileToMsgId[fId], path); }
+                if (_fileToChatId.ContainsKey(fId)) { var t = UpdateAvatar(_fileToChatId[fId], path); }
+                if (_fileToMsgId.ContainsKey(fId)) { var t = UpdateMessagePhoto(_fileToMsgId[fId], path); }
             } else {
-                Log("FILE DOWNLOAD id=" + fId + " ready=" + ready + " path=" + (path ?? "null"));
                 TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":10}");
             }
         }
 
         private async Task UpdateAvatar(long chatId, string path) {
             try {
-                if (string.IsNullOrEmpty(path)) { Log("AVATAR ERR: пустой путь для чата " + chatId); return; }
+                if (string.IsNullOrEmpty(path)) return;
                 var bitmap = new BitmapImage();
                 var file = await StorageFile.GetFileFromPathAsync(path);
                 using (var s = await file.OpenReadAsync()) {
                     await bitmap.SetSourceAsync(s);
                     if (_chatsDict.ContainsKey(chatId)) _chatsDict[chatId].Photo = bitmap;
                 }
-            } catch (Exception ex) { Log("AVATAR ERR: " + ex.Message + " | path=" + path); }
+            } catch { }
         }
 
         private async Task UpdateMessagePhoto(long msgId, string path) {
             try {
-                if (string.IsNullOrEmpty(path)) { Log("PHOTO ERR: пустой путь для msg " + msgId); return; }
+                if (string.IsNullOrEmpty(path)) return;
                 var bitmap = new BitmapImage();
                 var file = await StorageFile.GetFileFromPathAsync(path);
                 using (var s = await file.OpenReadAsync()) {
                     await bitmap.SetSourceAsync(s);
-                    if (_messagesDict.ContainsKey(msgId)) {
-                        _messagesDict[msgId].AttachedPhoto = bitmap;
-                        _messagesDict[msgId].OnPropertyChanged("PhotoVisibility");
-                    }
+                    if (_messagesDict.ContainsKey(msgId))
+                        _messagesDict[msgId].AttachedPhoto = bitmap; // сеттер сам вызывает OnPropertyChanged для AttachedPhoto и PhotoVisibility
                 }
-            } catch (Exception ex) { Log("PHOTO ERR: " + ex.Message + " | path=" + path); }
+            } catch { }
         }
 
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
             var chat = (ChatItem)e.ClickedItem; _currentChatId = chat.Id; CurrentChatTitle.Text = chat.Title;
-            _messageItems.Clear(); _messagesDict.Clear(); StartPanel.Visibility = Visibility.Collapsed; MessagesPanel.Visibility = Visibility.Visible;
+            _messageItems.Clear();
+            _messagesDict.Clear();
+            _fileToMsgId.Clear();
+            StartPanel.Visibility = Visibility.Collapsed; MessagesPanel.Visibility = Visibility.Visible;
             TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
         }
 
@@ -236,6 +220,5 @@ namespace TelegramWP10
         private void BackButton_Click(object sender, RoutedEventArgs e) { _currentChatId = 0; MessagesPanel.Visibility = Visibility.Collapsed; StartPanel.Visibility = Visibility.Visible; }
         private void SendPhone_Click(object sender, RoutedEventArgs e) => TdJson.SendUtf8(_client, "{\"@type\":\"setAuthenticationPhoneNumber\",\"phone_number\":\"" + PhoneInput.Text + "\"}");
         private void SendCode_Click(object sender, RoutedEventArgs e) => TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
-        private void CopyLog_Click(object sender, RoutedEventArgs e) { var p = new DataPackage(); p.SetText(DebugConsole.Text); Clipboard.SetContent(p); }
     }
 }
