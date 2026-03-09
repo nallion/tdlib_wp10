@@ -30,12 +30,8 @@
                                 <ColumnDefinition Width="60"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border Width="50" Height="50" CornerRadius="25" Background="#555555">
-                                <Image Source="{Binding Photo}" Stretch="UniformToFill" Width="50" Height="50">
-                                    <Image.Clip>
-                                        <EllipseGeometry Center="25,25" RadiusX="25" RadiusY="25"/>
-                                    </Image.Clip>
-                                </Image>
+                            <Border Width="50" Height="50" CornerRadius="25" Background="#555555" BorderThickness="0">
+                                <Image Source="{Binding Photo}" Stretch="UniformToFill" Width="50" Height="50"/>
                             </Border>
                             <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="5,0" FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
                         </Grid>
