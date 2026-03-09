@@ -36,8 +36,8 @@ namespace TelegramWP10
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v10", 
-                ["files_directory"] = path + "/td_files_v10",
+                ["database_directory"] = path + "/td_db_v11", // Новая версия базы для чистого теста
+                ["files_directory"] = path + "/td_files_v11",
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
@@ -59,7 +59,6 @@ namespace TelegramWP10
                         try {
                             var update = JObject.Parse(json);
                             string type = update["@type"]?.ToString();
-                            if (type != "updateUserStatus") DebugText.Text = "Last: " + type; 
                             HandleUpdate(type, update);
                         } catch { }
                     });
@@ -70,7 +69,7 @@ namespace TelegramWP10
         private void HandleUpdate(string type, JObject update)
         {
             if (type == "error") {
-                StatusText.Text = "Ошибка: " + update["message"];
+                DebugText.Text = "TDLib Error: " + update["message"];
                 return;
             }
 
@@ -157,11 +156,18 @@ namespace TelegramWP10
         private void UpdateAvatar(long chatId, string path) {
             if (string.IsNullOrEmpty(path)) return;
             try {
+                // ДЕБАГ ЛОГ
+                DebugText.Text = "Path: " + path.Substring(Math.Max(0, path.Length - 30));
+
                 string localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
                 string relativePath = path.Replace(localFolder, "").Replace("\\", "/");
                 string finalUri = "ms-appdata:///local" + relativePath;
+
+                // Важно: обновление Photo вызовет OnPropertyChanged в ChatItem
                 _chatsDict[chatId].Photo = new BitmapImage(new Uri(finalUri));
-            } catch { }
+            } catch (Exception ex) {
+                DebugText.Text = "Avatar Err: " + ex.Message;
+            }
         }
 
         private MessageItem ParseMessage(JToken msg)
