@@ -1,5 +1,7 @@
+using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Windows.UI.Xaml.Media.Imaging;
 
 namespace TelegramWP10
 {
@@ -8,13 +10,15 @@ namespace TelegramWP10
         public long Id { get; set; }
         public string Title { get; set; }
         
-        private string _photoPath = "ms-appx:///Assets/Square44x44Logo.png"; 
-        public string PhotoPath 
+        // Заглушка
+        private BitmapImage _photo = new BitmapImage(new Uri("ms-appx:///Assets/Square44x44Logo.png")); 
+        
+        public BitmapImage Photo 
         { 
-            get => _photoPath; 
+            get => _photo; 
             set { 
-                _photoPath = value; 
-                OnPropertyChanged("PhotoPath"); 
+                _photo = value; 
+                OnPropertyChanged("Photo"); 
             } 
         }
 

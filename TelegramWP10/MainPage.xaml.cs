@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Media.Imaging;
 using Newtonsoft.Json.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -29,19 +30,9 @@ namespace TelegramWP10
         private void SendParameters()
         {
             string path = Windows.Storage.ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
-            JObject p = new JObject();
-            p["@type"] = "setTdlibParameters";
-            p["use_test_dc"] = false;
-            // Смена путей на v3 для полной очистки от старых чатов
-            p["database_directory"] = path + "/td_db_v3";
-            p["files_directory"] = path + "/td_files_v3";
-            p["api_id"] = 26688287; // ВСТАВЬ СВОЙ ID
-            p["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b"; // ВСТАВЬ СВОЙ HASH
-            p["system_language_code"] = "ru";
-            p["device_model"] = "Lumia";
-            p["system_version"] = "10";
-            p["application_version"] = "1.0";
-            TdJson.td_json_client_send(_client, p.ToString());
+            // ВСТАВЬТЕ СВОИ ДАННЫЕ
+            string json = "{\"@type\":\"setTdlibParameters\",\"use_test_dc\":false,\"database_directory\":\"" + path + "/td_db_v4\",\"files_directory\":\"" + path + "/td_files_v4\",\"api_id\":26688287,\"api_hash\":\"5f4afe72bc71dc6ec40f7dcb0c9a822b\",\"system_language_code\":\"ru\",\"device_model\":\"Lumia\",\"system_version\":\"WP10\",\"application_version\":\"1.0\"}";
+            TdJson.td_json_client_send(_client, json);
         }
 
         private void LongPolling()
@@ -72,46 +63,73 @@ namespace TelegramWP10
                     if (state == "authorizationStateWaitCode") {
                         CodeInput.Visibility = Visibility.Visible;
                         CodeButton.Visibility = Visibility.Visible;
+                        StatusText.Text = "Введите код:";
                     }
                     if (state == "authorizationStateReady") {
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
+                        StatusText.Text = "Ваши чаты:";
+                        // Запрашиваем 20 актуальных чатов
                         TdJson.td_json_client_send(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":20}");
                     }
                     break;
 
+                // 1. TDLib рассказывает нам о существовании чата (но мы еще не выводим его на экран!)
                 case "updateNewChat":
                     var chat = update["chat"];
                     if (chat == null) return;
+                    
                     long id = (long)chat["id"];
-                    string title = chat["title"]?.ToString();
+                    if (!_chatsDict.ContainsKey(id)) {
+                        _chatsDict[id] = new ChatItem { Id = id, Title = chat["title"]?.ToString() ?? "Чат" };
 
-                    // Фильтруем пустые или служебные чаты без имен
-                    if (!string.IsNullOrEmpty(title) && !_chatsDict.ContainsKey(id)) {
-                        var item = new ChatItem { Id = id, Title = title };
-                        _chatsDict[id] = item;
-                        _chatListItems.Add(item);
-
+                        // Если есть фото, сразу просим его скачать
                         var smallPhoto = chat["photo"]?["small"];
                         if (smallPhoto != null) {
                             int fId = (int)smallPhoto["id"];
                             _fileToChatId[fId] = id;
-                            TdJson.td_json_client_send(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":1}");
+                            
+                            // Проверяем, может фото уже скачано
+                            string localPath = smallPhoto["local"]?["path"]?.ToString();
+                            if (!string.IsNullOrEmpty(localPath)) {
+                                _chatsDict[id].Photo = new BitmapImage(new Uri(localPath));
+                            } else {
+                                TdJson.td_json_client_send(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":1}");
+                            }
                         }
                     }
                     break;
 
+                // 2. TDLib присылает ответ на getChats - это наш РЕАЛЬНЫЙ список чатов
+                case "chats":
+                    var chatIds = update["chat_ids"];
+                    if (chatIds != null) {
+                        foreach (var cIdToken in chatIds) {
+                            long cId = (long)cIdToken;
+                            if (_chatsDict.ContainsKey(cId)) {
+                                var item = _chatsDict[cId];
+                                // Если чата еще нет на экране — добавляем
+                                if (!_chatListItems.Contains(item)) {
+                                    _chatListItems.Add(item);
+                                }
+                            }
+                        }
+                    }
+                    break;
+
+                // 3. TDLib скачала файл аватарки
                 case "updateFile":
                     var file = update["file"];
                     if (file == null) return;
                     int fileId = (int)file["id"];
-                    string localPath = file["local"]?["path"]?.ToString();
+                    string path = file["local"]?["path"]?.ToString();
 
-                    if (!string.IsNullOrEmpty(localPath) && file["local"]?["is_completed"]?.Value<bool>() == true) {
+                    if (!string.IsNullOrEmpty(path) && file["local"]?["is_completed"]?.Value<bool>() == true) {
                         if (_fileToChatId.ContainsKey(fileId)) {
                             long cId = _fileToChatId[fileId];
                             if (_chatsDict.ContainsKey(cId)) {
-                                _chatsDict[cId].PhotoPath = localPath;
+                                // Превращаем путь в картинку (UWP BitmapImage)
+                                _chatsDict[cId].Photo = new BitmapImage(new Uri(path));
                             }
                         }
                     }
