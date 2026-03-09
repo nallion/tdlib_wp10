@@ -191,7 +191,24 @@ namespace TelegramWP10
                     }
                     break;
 
-                case "chats":
+                case "updateConnectionState":
+                    var connState = update["state"]?["@type"]?.ToString();
+                    Log("CONN: " + connState);
+                    if (connState == "connectionStateReady") {
+                        ConnectionStatus.Visibility = Visibility.Collapsed;
+                        ChatListView.IsHitTestVisible = true;
+                    } else {
+                        string connText = connState == "connectionStateConnecting" ? "Подключение..."
+                            : connState == "connectionStateUpdating" ? "Обновление..."
+                            : connState == "connectionStateWaitingForNetwork" ? "Нет сети..."
+                            : "...";
+                        ConnectionStatus.Text = connText;
+                        ConnectionStatus.Visibility = Visibility.Visible;
+                        ChatListView.IsHitTestVisible = false;
+                    }
+                    break;
+
+
                     Log("chats count=" + (update["chat_ids"] as JArray)?.Count);
                     foreach (var cId in update["chat_ids"]) {
                         long cid = (long)cId;
@@ -205,12 +222,15 @@ namespace TelegramWP10
                     var msgs = update["messages"] as JArray;
                     Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
+                    // Обновляем только если новых сообщений больше чем уже показано
+                    if (msgs == null || msgs.Count <= _messageItems.Count) {
+                        Log("SKIP — no new messages (have " + _messageItems.Count + ", got " + msgs?.Count + ")");
+                        break;
+                    }
                     _messageItems.Clear();
-                    if (msgs != null) {
-                        for (int i = msgs.Count - 1; i >= 0; i--) {
-                            var item = ParseMessage(msgs[i]);
-                            if (item != null) _messageItems.Add(item);
-                        }
+                    for (int i = msgs.Count - 1; i >= 0; i--) {
+                        var item = ParseMessage(msgs[i]);
+                        if (item != null) _messageItems.Add(item);
                     }
                     Log("rendered " + _messageItems.Count + " messages");
                     // Показываем список только когда сообщения загружены
@@ -336,6 +356,14 @@ namespace TelegramWP10
             MessagesListView.Visibility = Visibility.Collapsed;
             Log("OPEN CHAT id=" + _currentChatId + " title=" + chat.Title);
             TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
+            // Второй запрос с задержкой — на случай холодного старта когда TDLib ещё грузит базу
+            var chatIdCopy = _currentChatId;
+            var ignored = Task.Delay(1500).ContinueWith(_ => {
+                var ignored2 = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                    if (_currentChatId == chatIdCopy) // пользователь всё ещё в этом чате
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + chatIdCopy + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
+                });
+            });
         }
 
         private void SendMessage_Click(object sender, RoutedEventArgs e) {
