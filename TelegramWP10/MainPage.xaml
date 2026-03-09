@@ -25,9 +25,9 @@
 
             <ListView x:Name="ChatListView" Grid.Row="1" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
                 <ListView.Header>
-                    <TextBlock x:Name="ConnectionStatus" Text="Подключение..." Foreground="White" FontSize="13"
-                               Background="#CC880000" Padding="10,6" Visibility="Collapsed"
-                               HorizontalAlignment="Stretch" TextAlignment="Center"/>
+                    <Border x:Name="ConnectionStatus" Background="#CC880000" Padding="10,6" Visibility="Collapsed" HorizontalAlignment="Stretch">
+                        <TextBlock x:Name="ConnectionStatusText" Text="Подключение..." Foreground="White" FontSize="13" TextAlignment="Center"/>
+                    </Border>
                 </ListView.Header>
                 <ListView.ItemTemplate>
                     <DataTemplate>

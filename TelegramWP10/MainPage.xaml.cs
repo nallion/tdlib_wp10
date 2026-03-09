@@ -202,7 +202,7 @@ namespace TelegramWP10
                             : connState == "connectionStateUpdating" ? "Обновление..."
                             : connState == "connectionStateWaitingForNetwork" ? "Нет сети..."
                             : "...";
-                        ConnectionStatus.Text = connText;
+                        ConnectionStatusText.Text = connText;
                         ConnectionStatus.Visibility = Visibility.Visible;
                         ChatListView.IsHitTestVisible = false;
                     }
