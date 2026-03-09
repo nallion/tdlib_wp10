@@ -21,8 +21,9 @@ namespace TelegramWP10
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
         private long _currentChatId = 0;
         private long _pendingHistoryChatId = 0;
+        private string _dbPath = "";
         private bool _connectionReady = false;
-        private long _pendingChatHistoryId = 0; // чат ожидающий загрузки после подключения
+        private long _pendingChatHistoryId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
 
