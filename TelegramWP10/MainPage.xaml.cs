@@ -23,6 +23,7 @@ namespace TelegramWP10
         private long _pendingHistoryChatId = 0;
         private string _dbPath = "";
         private bool _connectionReady = false;
+        private bool _isAuthorized = false;
         private long _pendingChatHistoryId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
@@ -125,6 +126,7 @@ namespace TelegramWP10
                     if (s == "authorizationStateWaitPassword")
                         LoginStatus.Text = "Введите пароль 2FA";
                     if (s == "authorizationStateReady") {
+                        _isAuthorized = true;
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
@@ -146,9 +148,10 @@ namespace TelegramWP10
                 case "updateNewChat":
                     var c = update["chat"];
                     long chatId = (long)c["id"];
-                    // Если пришёл updateNewChat — значит уже авторизованы (сессия сохранена)
-                    // Показываем список чатов если он ещё скрыт
-                    if (ChatListView.Visibility == Visibility.Collapsed && LoginPanel.Visibility == Visibility.Visible) {
+                    // Если пришёл updateNewChat — TDLib уже авторизован (сессия сохранена)
+                    if (!_isAuthorized) {
+                        _isAuthorized = true;
+                        Log("AUTH via updateNewChat (saved session)");
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
