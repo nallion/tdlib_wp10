@@ -65,6 +65,8 @@ namespace TelegramWP10
                         try {
                             var update = JObject.Parse(json);
                             string type = update["@type"]?.ToString();
+                            // Глубокая отладка: логируем все входящие события
+                            Log("← " + type + ": " + json.Substring(0, Math.Min(json.Length, 300)));
                             if (type == "error") Log("TG ERR: " + json);
                             HandleUpdate(type, update);
                         } catch (Exception ex) { Log("JSON ERR: " + ex.Message); }
@@ -167,16 +169,20 @@ namespace TelegramWP10
                     }
                 }
 
-                if (string.IsNullOrEmpty(item.Text) && !item.PhotoVisibility.Equals(Visibility.Visible)) item.Text = "[" + type.Replace("message", "") + "]";
+                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo") item.Text = "[" + type.Replace("message", "") + "]";
                 return item;
             } catch { return null; }
         }
 
         private void ProcessFile(long fId, string path, bool ready) {
             if (ready && !string.IsNullOrEmpty(path)) {
-                if (_fileToChatId.ContainsKey(fId)) { var t = UpdateAvatar(_fileToChatId[fId], path); }
-                if (_fileToMsgId.ContainsKey(fId)) { var t = UpdateMessagePhoto(_fileToMsgId[fId], path); }
-            } else TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":10}");
+                Log("FILE READY id=" + fId + " path=" + path);
+                if (_fileToChatId.ContainsKey(fId)) { Log("→ UpdateAvatar chatId=" + _fileToChatId[fId]); var t = UpdateAvatar(_fileToChatId[fId], path); }
+                if (_fileToMsgId.ContainsKey(fId)) { Log("→ UpdateMsgPhoto msgId=" + _fileToMsgId[fId]); var t = UpdateMessagePhoto(_fileToMsgId[fId], path); }
+            } else {
+                Log("FILE DOWNLOAD id=" + fId + " ready=" + ready + " path=" + (path ?? "null"));
+                TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":10}");
+            }
         }
 
         private async Task UpdateAvatar(long chatId, string path) {
