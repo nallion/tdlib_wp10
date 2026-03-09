@@ -31,21 +31,28 @@ namespace TelegramWP10
         }
 
         private async void InitAsync() {
-            // Пробуем SD карту — она переживает переустановку
             try {
                 var devices = Windows.Storage.KnownFolders.RemovableDevices;
                 var folders = await devices.GetFoldersAsync();
-                if (folders.Count > 0) {
-                    var sdCard = folders[0];
-                    var appFolder = await sdCard.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
-                    _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
-                } else {
-                    _dbPath = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/") + "/td_db";
+                if (folders.Count == 0) {
+                    await ShowError("SD карта не найдена. Вставьте карту памяти и перезапустите приложение.");
+                    return;
                 }
-            } catch {
-                _dbPath = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/") + "/td_db";
+                var sdCard = folders[0];
+                LoginStatus.Text = "SD карта найдена: " + sdCard.Path;
+                var appFolder = await sdCard.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
+                _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
+                LoginStatus.Text = "База данных: " + _dbPath;
+            } catch (Exception ex) {
+                await ShowError("Ошибка доступа к SD карте:\n" + ex.Message + "\n\nТип: " + ex.GetType().Name);
+                return;
             }
             Task.Run(() => LongPolling());
+        }
+
+        private async Task ShowError(string message) {
+            var dialog = new Windows.UI.Popups.MessageDialog(message, "Ошибка");
+            await dialog.ShowAsync();
         }
 
         private string _dbPath = "";
