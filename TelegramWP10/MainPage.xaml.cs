@@ -43,7 +43,7 @@ namespace TelegramWP10
             string path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
-                ["use_test_dc"] = false,
+                ["use_test_dc"] = true,
                 ["database_directory"] = path + "/td_db_v40", 
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
@@ -97,14 +97,14 @@ namespace TelegramWP10
                     if (!_chatsDict.ContainsKey(id)) _chatsDict[id] = new ChatItem { Id = id, Title = c["title"]?.ToString() };
                     var p = c["photo"]?["small"];
                     if (p != null) {
-                        // Fix bug 1: register file mapping BEFORE processing so UpdateAvatar can find the chat
                         _fileToChatId[(long)p["id"]] = id;
-                        ProcessFile((long)p["id"], p["local"]?["path"]?.ToString(), (bool)p["local"]["is_completed"]);
+                        bool isCompleted = p["local"]?["is_completed"]?.ToObject<bool>() ?? false;
+                        ProcessFile((long)p["id"], p["local"]?["path"]?.ToString(), isCompleted);
                     }
                     break;
                 case "updateFile":
                     var f = update["file"];
-                    if (f != null && (bool)f["local"]["is_completed"]) {
+                    if (f != null && (f["local"]?["is_completed"]?.ToObject<bool>() ?? false)) {
                         long fid = (long)f["id"]; string path = f["local"]["path"]?.ToString();
                         if (_fileToChatId.ContainsKey(fid)) { var t = UpdateAvatar(_fileToChatId[fid], path); }
                         if (_fileToMsgId.ContainsKey(fid)) { var t = UpdateMessagePhoto(_fileToMsgId[fid], path); }
@@ -149,21 +149,21 @@ namespace TelegramWP10
                 if (type == "messagePhoto") {
                     var ph = content["photo"]?["sizes"]?.Last?["photo"];
                     if (ph != null) {
-                        // Fix bug 3: populate dictionaries BEFORE ProcessFile so callbacks can find the message
                         long phFileId = (long)ph["id"];
                         _fileToMsgId[phFileId] = msgId;
                         _messagesDict[msgId] = item;
-                        ProcessFile(phFileId, ph["local"]?["path"]?.ToString(), (bool)ph["local"]["is_completed"]);
+                        bool phReady = ph["local"]?["is_completed"]?.ToObject<bool>() ?? false;
+                        ProcessFile(phFileId, ph["local"]?["path"]?.ToString(), phReady);
                     }
                 } else if (type == "messageVideo") {
                     item.IsVideo = true;
                     var v = content["video"]?["thumbnail"]?["file"];
                     if (v != null) {
-                        // Fix bug 3: same fix for video thumbnails
                         long vFileId = (long)v["id"];
                         _fileToMsgId[vFileId] = msgId;
                         _messagesDict[msgId] = item;
-                        ProcessFile(vFileId, v["local"]?["path"]?.ToString(), (bool)v["local"]["is_completed"]);
+                        bool vReady = v["local"]?["is_completed"]?.ToObject<bool>() ?? false;
+                        ProcessFile(vFileId, v["local"]?["path"]?.ToString(), vReady);
                     }
                 }
 
@@ -181,17 +181,19 @@ namespace TelegramWP10
 
         private async Task UpdateAvatar(long chatId, string path) {
             try {
+                if (string.IsNullOrEmpty(path)) { Log("AVATAR ERR: пустой путь для чата " + chatId); return; }
                 var bitmap = new BitmapImage();
                 var file = await StorageFile.GetFileFromPathAsync(path);
                 using (var s = await file.OpenReadAsync()) {
                     await bitmap.SetSourceAsync(s);
                     if (_chatsDict.ContainsKey(chatId)) _chatsDict[chatId].Photo = bitmap;
                 }
-            } catch { }
+            } catch (Exception ex) { Log("AVATAR ERR: " + ex.Message + " | path=" + path); }
         }
 
         private async Task UpdateMessagePhoto(long msgId, string path) {
             try {
+                if (string.IsNullOrEmpty(path)) { Log("PHOTO ERR: пустой путь для msg " + msgId); return; }
                 var bitmap = new BitmapImage();
                 var file = await StorageFile.GetFileFromPathAsync(path);
                 using (var s = await file.OpenReadAsync()) {
@@ -201,7 +203,7 @@ namespace TelegramWP10
                         _messagesDict[msgId].OnPropertyChanged("PhotoVisibility");
                     }
                 }
-            } catch { }
+            } catch (Exception ex) { Log("PHOTO ERR: " + ex.Message + " | path=" + path); }
         }
 
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
