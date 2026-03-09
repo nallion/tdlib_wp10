@@ -7,8 +7,8 @@
 
     <Grid>
         <StackPanel x:Name="StartPanel" Padding="20">
-            <TextBlock x:Name="StatusText" Text="Статус: Ожидание..." Foreground="Gray" FontSize="12"/>
-            <TextBlock x:Name="DebugText" Text="Debug: -" Foreground="Yellow" FontSize="10" Margin="0,5"/>
+            <TextBlock x:Name="StatusText" Text="Статус: Ожидание..." Foreground="Gray" FontSize="14"/>
+            <TextBlock x:Name="DebugText" Text="Debug: -" Foreground="Yellow" FontSize="10" TextWrapping="Wrap" Margin="0,5"/>
 
             <StackPanel x:Name="LoginPanel" Visibility="Collapsed">
                 <TextBox x:Name="PhoneInput" Header="Телефон" PlaceholderText="+7..." InputScope="TelephoneNumber"/>
@@ -17,7 +17,7 @@
                 <Button x:Name="CodeButton" Content="Войти" Click="SendCode_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
             </StackPanel>
 
-            <ListView x:Name="ChatListView" Height="600" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
+            <ListView x:Name="ChatListView" Height="580" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:ChatItem">
                         <Grid Margin="0,10">
@@ -30,7 +30,7 @@
                                     <ImageBrush ImageSource="{Binding Photo}"/>
                                 </Ellipse.Fill>
                             </Ellipse>
-                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="15,0" FontSize="18" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="15,0" FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
@@ -64,8 +64,8 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="MessageInput" PlaceholderText="Сообщение..." AcceptsReturn="True"/>
-                <Button Grid.Column="1" Content="➤" Click="SendMessage_Click" Margin="10,0,0,0" Width="50" Background="#0088cc" Foreground="White"/>
+                <TextBox x:Name="MessageInput" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="80"/>
+                <Button Grid.Column="1" Content="➤" Click="SendMessage_Click" Margin="10,0,0,0" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
             </Grid>
         </Grid>
     </Grid>
