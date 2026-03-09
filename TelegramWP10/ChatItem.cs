@@ -50,6 +50,14 @@ namespace TelegramWP10
         public string StatusVisibility => IsOutgoing ? "Visible" : "Collapsed";
         public string StatusText => IsRead ? "✓✓" : "✓";
 
+        private bool _isOnline = false;
+        public bool IsOnline
+        {
+            get => _isOnline;
+            set { _isOnline = value; OnPropertyChanged("IsOnline"); OnPropertyChanged("OnlineVisibility"); }
+        }
+        public string OnlineVisibility => IsOnline ? "Visible" : "Collapsed";
+
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string propertyName)
         {

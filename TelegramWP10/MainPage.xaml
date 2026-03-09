@@ -44,9 +44,15 @@
                                 <ColumnDefinition Width="60"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border Width="50" Height="50" CornerRadius="25" Background="#555555" BorderThickness="0" VerticalAlignment="Top">
-                                <Image Source="{Binding Photo}" Stretch="UniformToFill" Width="50" Height="50"/>
-                            </Border>
+                            <Grid Width="60" VerticalAlignment="Top">
+                                <Border Width="50" Height="50" CornerRadius="25" Background="#555555" BorderThickness="0" HorizontalAlignment="Left">
+                                    <Image Source="{Binding Photo}" Stretch="UniformToFill" Width="50" Height="50"/>
+                                </Border>
+                                <Ellipse Width="14" Height="14" Fill="#22C55E"
+                                         HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                         Margin="0,0,2,0"
+                                         Visibility="{Binding OnlineVisibility}"/>
+                            </Grid>
                             <Grid Grid.Column="1" Margin="5,0,0,0">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>

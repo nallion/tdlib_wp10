@@ -267,6 +267,25 @@ namespace TelegramWP10
                     }
                     break;
 
+                case "updateUser":
+                    var user = update["user"];
+                    long uid = user?["id"]?.ToObject<long>() ?? 0;
+                    if (uid != 0 && _chatsDict.ContainsKey(uid)) {
+                        string uStatus = user["status"]?["@type"]?.ToString();
+                        _chatsDict[uid].IsOnline = uStatus == "userStatusOnline";
+                    }
+                    break;
+
+                case "updateUserStatus":
+                    long userId = update["user_id"]?.ToObject<long>() ?? 0;
+                    string statusType = update["status"]?["@type"]?.ToString();
+                    bool isOnline = statusType == "userStatusOnline";
+                    // Ищем чат с этим пользователем
+                    foreach (var kvp in _chatsDict) {
+                        if (kvp.Key == userId) { kvp.Value.IsOnline = isOnline; break; }
+                    }
+                    break;
+
                 case "updateChatLastMessage":
                     long ulcId = update["chat_id"]?.ToObject<long>() ?? 0;
                     var ulcMsg = update["last_message"];
@@ -299,11 +318,6 @@ namespace TelegramWP10
                     var msgs = update["messages"] as JArray;
                     Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
-                    // Обновляем только если новых сообщений больше чем уже показано
-                    if (msgs == null || msgs.Count <= _messageItems.Count) {
-                        Log("SKIP — no new messages (have " + _messageItems.Count + ", got " + msgs?.Count + ")");
-                        break;
-                    }
                     _messageItems.Clear();
                     for (int i = msgs.Count - 1; i >= 0; i--) {
                         var item = ParseMessage(msgs[i]);
