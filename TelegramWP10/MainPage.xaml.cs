@@ -124,7 +124,8 @@ namespace TelegramWP10
                         LoginStatus.Text = "Введите пароль 2FA";
                     if (s == "authorizationStateReady") {
                         LoginPanel.Visibility = Visibility.Collapsed;
-                        ChatListView.Visibility = Visibility.Visible;
+                        // Помечаем что авторизация прошла, но показываем список только когда соединение готово
+                        ChatListView.Tag = "ready";
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
                     }
                     if (s == "authorizationStateLoggingOut" || s == "authorizationStateClosed") {
@@ -196,7 +197,9 @@ namespace TelegramWP10
                     Log("CONN: " + connState);
                     if (connState == "connectionStateReady") {
                         ConnectionStatus.Visibility = Visibility.Collapsed;
-                        ChatListView.IsHitTestVisible = true;
+                        // Показываем список чатов только когда соединение готово
+                        if (ChatListView.Tag?.ToString() == "ready")
+                            ChatListView.Visibility = Visibility.Visible;
                     } else {
                         string connText = connState == "connectionStateConnecting" ? "Подключение..."
                             : connState == "connectionStateUpdating" ? "Обновление..."
@@ -204,7 +207,7 @@ namespace TelegramWP10
                             : "...";
                         ConnectionStatusText.Text = connText;
                         ConnectionStatus.Visibility = Visibility.Visible;
-                        ChatListView.IsHitTestVisible = false;
+                        ChatListView.Visibility = Visibility.Collapsed;
                     }
                     break;
 
