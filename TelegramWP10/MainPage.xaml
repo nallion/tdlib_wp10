@@ -11,7 +11,26 @@
     <Grid>
         <StackPanel x:Name="StartPanel" Padding="20">
             <TextBlock x:Name="StatusText" Text="Загрузка..." Foreground="Gray" FontSize="14"/>
-            <TextBlock x:Name="DebugText" Text="Logs: -" Foreground="Yellow" FontSize="10" TextWrapping="Wrap" Margin="0,5"/>
+            
+            <Grid Margin="0,5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="150"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Системный лог:" Foreground="Lime" FontSize="10" Margin="0,2"/>
+                <TextBox x:Name="DebugConsole" 
+                         Grid.Row="1"
+                         IsReadOnly="True" 
+                         AcceptsReturn="True" 
+                         TextWrapping="Wrap" 
+                         FontSize="10" 
+                         FontFamily="Consolas"
+                         Background="#111111" 
+                         Foreground="Lime"/>
+                <Button Grid.Row="2" Content="Копировать лог" Click="CopyLog_Click" 
+                        HorizontalAlignment="Right" FontSize="10" Margin="0,5,0,10"/>
+            </Grid>
 
             <StackPanel x:Name="LoginPanel" Visibility="Collapsed">
                 <TextBox x:Name="PhoneInput" Header="Телефон" PlaceholderText="+7..." InputScope="TelephoneNumber"/>
@@ -20,7 +39,7 @@
                 <Button x:Name="CodeButton" Content="Войти" Click="SendCode_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
             </StackPanel>
 
-            <ListView x:Name="ChatListView" Height="550" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
+            <ListView x:Name="ChatListView" Height="400" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="0,10">
@@ -30,7 +49,7 @@
                             </Grid.ColumnDefinitions>
                             <Ellipse Width="50" Height="50">
                                 <Ellipse.Fill>
-                                    <ImageBrush ImageSource="{Binding Photo, Mode=OneWay}" Stretch="UniformToFill"/>
+                                    <ImageBrush ImageSource="{Binding Photo}" Stretch="UniformToFill"/>
                                 </Ellipse.Fill>
                             </Ellipse>
                             <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="5,0" FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
@@ -60,10 +79,12 @@
                                 <Border Background="#44000000" BorderBrush="#88FFFFFF" BorderThickness="2,0,0,0" Margin="0,0,0,5" Padding="5,2" Visibility="{Binding ReplyVisibility}">
                                     <TextBlock Text="{Binding ReplyToText}" FontSize="12" Foreground="#CCCCCC" TextTrimming="CharacterEllipsis" MaxLines="2"/>
                                 </Border>
+                                
                                 <Grid Visibility="{Binding PhotoVisibility}" Margin="0,0,0,5">
                                     <Image Source="{Binding AttachedPhoto}" Stretch="Uniform" MaxWidth="250"/>
                                     <TextBlock Text="▶" Foreground="White" FontSize="40" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding VideoIconVisibility}" Opacity="0.8"/>
                                 </Grid>
+                                
                                 <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="White" FontSize="16"/>
                                 <TextBlock Text="{Binding Date}" FontSize="10" Foreground="#AAAAAA" HorizontalAlignment="Right" Margin="0,2,0,0"/>
                             </StackPanel>

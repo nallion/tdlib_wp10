@@ -7,6 +7,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media.Imaging;
 using Windows.Storage;
+using Windows.ApplicationModel.DataTransfer;
 using Newtonsoft.Json.Linq;
 
 namespace TelegramWP10
@@ -25,210 +26,162 @@ namespace TelegramWP10
         public MainPage()
         {
             this.InitializeComponent();
-            _client = TdJson.td_json_client_create();
+            Application.Current.UnhandledException += (s, e) => { Log("CRASH: " + e.Message); e.Handled = true; };
+            try {
+                _client = TdJson.td_json_client_create();
+                Log("TDLib Client Created");
+            } catch (Exception ex) { Log("Create Error: " + ex.Message); }
             ChatListView.ItemsSource = _chatListItems;
             MessagesListView.ItemsSource = _messageItems;
             Task.Run(() => LongPolling());
             SendParameters();
         }
 
-        private void SendParameters()
-        {
+        private void Log(string m) {
+            var ignored = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => {
+                DebugConsole.Text = $"[{DateTime.Now:HH:mm:ss}] {m}\n" + DebugConsole.Text;
+            });
+        }
+
+        private void SendParameters() {
             string path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v21", 
+                ["database_directory"] = path + "/td_db_v30", 
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
                 ["device_model"] = "Lumia",
-                ["application_version"] = "1.0"
+                ["application_version"] = "1.1"
             };
             TdJson.SendUtf8(_client, p.ToString());
         }
 
-        private void LongPolling()
-        {
-            while (true)
-            {
+        private void LongPolling() {
+            while (true) {
                 IntPtr resPtr = TdJson.td_json_client_receive(_client, 1.0);
-                if (resPtr != IntPtr.Zero)
-                {
+                if (resPtr != IntPtr.Zero) {
                     string json = TdJson.IntPtrToStringUtf8(resPtr);
                     var ignored = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                         try {
                             var update = JObject.Parse(json);
-                            HandleUpdate(update["@type"]?.ToString(), update);
-                        } catch { }
+                            string type = update["@type"]?.ToString();
+                            if (type == "error") Log("TG ERR: " + json);
+                            HandleUpdate(type, update);
+                        } catch (Exception ex) { Log("JSON ERR: " + ex.Message); }
                     });
                 }
             }
         }
 
-        private void HandleUpdate(string type, JObject update)
-        {
-            switch (type)
-            {
+        private void HandleUpdate(string type, JObject update) {
+            switch (type) {
                 case "updateAuthorizationState":
-                    var state = update["authorization_state"]?["@type"]?.ToString();
-                    if (state == "authorizationStateWaitPhoneNumber") LoginPanel.Visibility = Visibility.Visible;
-                    if (state == "authorizationStateWaitCode") { CodeInput.Visibility = Visibility.Visible; CodeButton.Visibility = Visibility.Visible; }
-                    if (state == "authorizationStateReady") {
-                        LoginPanel.Visibility = Visibility.Collapsed;
-                        ChatListView.Visibility = Visibility.Visible;
-                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
-                    }
+                    var s = update["authorization_state"]?["@type"]?.ToString();
+                    if (s == "authorizationStateWaitPhoneNumber") LoginPanel.Visibility = Visibility.Visible;
+                    if (s == "authorizationStateWaitCode") { CodeInput.Visibility = Visibility.Visible; CodeButton.Visibility = Visibility.Visible; }
+                    if (s == "authorizationStateReady") { LoginPanel.Visibility = Visibility.Collapsed; ChatListView.Visibility = Visibility.Visible; TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}"); }
                     break;
-
                 case "updateNewChat":
                     var c = update["chat"];
                     long id = (long)c["id"];
-                    if (!_chatsDict.ContainsKey(id)) {
-                        var chatItem = new ChatItem { Id = id, Title = c["title"]?.ToString() };
-                        _chatsDict[id] = chatItem;
-                    }
-                    var photo = c["photo"]?["small"];
-                    if (photo != null) {
-                        long fId = (long)photo["id"];
-                        _fileToChatId[fId] = id;
-                        ProcessFile(fId, photo["local"]?["path"]?.ToString(), (bool)photo["local"]["is_completed"]);
+                    if (!_chatsDict.ContainsKey(id)) _chatsDict[id] = new ChatItem { Id = id, Title = c["title"]?.ToString() };
+                    var p = c["photo"]?["small"];
+                    if (p != null) {
+                        _fileToChatId[(long)p["id"]] = id;
+                        ProcessFile((long)p["id"], p["local"]?["path"]?.ToString(), (bool)p["local"]["is_completed"]);
                     }
                     break;
-
                 case "updateFile":
                     var f = update["file"];
                     if (f != null && (bool)f["local"]["is_completed"]) {
-                        long fid = (long)f["id"];
-                        string path = f["local"]["path"]?.ToString();
-                        // ИСПРАВЛЕНО: убрали 'var t =' внутри if
-                        if (_fileToChatId.ContainsKey(fid)) UpdateAvatar(_fileToChatId[fid], path);
-                        if (_fileToMsgId.ContainsKey(fid)) UpdateMessagePhoto(_fileToMsgId[fid], path);
+                        long fid = (long)f["id"]; string path = f["local"]["path"]?.ToString();
+                        if (_fileToChatId.ContainsKey(fid)) { var t = UpdateAvatar(_fileToChatId[fid], path); }
+                        if (_fileToMsgId.ContainsKey(fid)) { var t = UpdateMessagePhoto(_fileToMsgId[fid], path); }
                     }
                     break;
-
                 case "chats":
-                    foreach (var cId in update["chat_ids"]) {
-                        if (_chatsDict.ContainsKey((long)cId) && !_chatListItems.Contains(_chatsDict[(long)cId]))
-                            _chatListItems.Add(_chatsDict[(long)cId]);
-                    }
+                    foreach (var cId in update["chat_ids"]) if (_chatsDict.ContainsKey((long)cId) && !_chatListItems.Contains(_chatsDict[(long)cId])) _chatListItems.Add(_chatsDict[(long)cId]);
                     break;
-
                 case "messages":
-                    if ((long)update["messages"][0]["chat_id"] == _currentChatId) {
-                        _messageItems.Clear();
-                        foreach (var m in update["messages"]) {
-                            var item = ParseMessage(m);
-                            if (item != null) _messageItems.Insert(0, item);
-                        }
-                    }
+                    _messageItems.Clear();
+                    foreach (var m in update["messages"]) { var item = ParseMessage(m); if (item != null) _messageItems.Insert(0, item); }
                     break;
             }
         }
 
         private MessageItem ParseMessage(JToken msg) {
-            long msgId = (long)msg["id"];
-            string txt = msg["content"]?["text"]?["text"]?.ToString() ?? msg["content"]?["caption"]?["text"]?.ToString() ?? "";
-            var item = new MessageItem {
-                Id = msgId, Text = txt,
-                Date = DateTimeOffset.FromUnixTimeSeconds((long)msg["date"]).LocalDateTime.ToString("HH:mm"),
-                Alignment = (bool)msg["is_outgoing"] ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
-            };
+            try {
+                long msgId = (long)msg["id"];
+                var content = msg["content"];
+                string type = content["@type"]?.ToString();
+                string txt = type == "messageText" ? content["text"]?["text"]?.ToString() : content["caption"]?["text"]?.ToString() ?? "";
+                
+                var item = new MessageItem {
+                    Id = msgId, Text = txt,
+                    Date = DateTimeOffset.FromUnixTimeSeconds((long)msg["date"]).LocalDateTime.ToString("HH:mm"),
+                    Alignment = (bool)msg["is_outgoing"] ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                    Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
+                };
 
-            if (msg["reply_to_message_id"]?.Value<long>() != 0) item.ReplyToText = "Ответ";
+                long rId = msg["reply_to_message_id"]?.Value<long>() ?? 0;
+                item.ReplyToText = rId != 0 ? "Цитата" : null;
 
-            string type = msg["content"]["@type"].ToString();
-            if (type == "messagePhoto") {
-                var p = msg["content"]["photo"]["sizes"].Last["photo"];
-                ProcessMediaItem((long)p["id"], msgId, item, p);
-            } else if (type == "messageVideo") {
-                item.IsVideo = true;
-                var v = msg["content"]["video"]["thumbnail"]?["file"];
-                if (v != null) ProcessMediaItem((long)v["id"], msgId, item, v);
-            }
-            return item;
+                if (type == "messagePhoto") {
+                    var ph = content["photo"]?["sizes"]?.Last?["photo"];
+                    if (ph != null) { _fileToMsgId[(long)ph["id"]] = msgId; _messagesDict[msgId] = item; ProcessFile((long)ph["id"], ph["local"]?["path"]?.ToString(), (bool)ph["local"]["is_completed"]); }
+                } else if (type == "messageVideo") {
+                    item.IsVideo = true;
+                    var v = content["video"]?["thumbnail"]?["file"];
+                    if (v != null) { _fileToMsgId[(long)v["id"]] = msgId; _messagesDict[msgId] = item; ProcessFile((long)v["id"], v["local"]?["path"]?.ToString(), (bool)v["local"]["is_completed"]); }
+                }
+                return item;
+            } catch { return null; }
         }
 
-        private void ProcessMediaItem(long fId, long msgId, MessageItem item, JToken fileObj) {
-            _fileToMsgId[fId] = msgId;
-            _messagesDict[msgId] = item;
-            ProcessFile(fId, fileObj["local"]?["path"]?.ToString(), (bool)fileObj["local"]["is_completed"]);
-        }
-
-        private void ProcessFile(long fId, string path, bool isReady) {
-            if (isReady) {
-                // ИСПРАВЛЕНО: убрали 'var t =' внутри if
-                if (_fileToChatId.ContainsKey(fId)) UpdateAvatar(_fileToChatId[fId], path);
-                if (_fileToMsgId.ContainsKey(fId)) UpdateMessagePhoto(_fileToMsgId[fId], path);
-            } else {
-                TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":10}");
-            }
+        private void ProcessFile(long fId, string path, bool ready) {
+            if (ready) {
+                if (_fileToChatId.ContainsKey(fId)) { var t = UpdateAvatar(_fileToChatId[fId], path); }
+                if (_fileToMsgId.ContainsKey(fId)) { var t = UpdateMessagePhoto(_fileToMsgId[fId], path); }
+            } else TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":10}");
         }
 
         private async Task UpdateAvatar(long chatId, string path) {
-            await Task.Delay(300);
-            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () => {
-                try {
-                    var bitmap = new BitmapImage();
-                    var file = await StorageFile.GetFileFromPathAsync(path);
-                    using (var stream = await file.OpenReadAsync()) {
-                        await bitmap.SetSourceAsync(stream);
-                        if (_chatsDict.ContainsKey(chatId)) _chatsDict[chatId].Photo = bitmap;
-                    }
-                } catch { }
-            });
+            try {
+                var bitmap = new BitmapImage();
+                using (var s = await (await StorageFile.GetFileFromPathAsync(path)).OpenReadAsync()) {
+                    await bitmap.SetSourceAsync(s);
+                    if (_chatsDict.ContainsKey(chatId)) _chatsDict[chatId].Photo = bitmap;
+                }
+            } catch (Exception ex) { Log("Ava Error: " + ex.Message); }
         }
 
         private async Task UpdateMessagePhoto(long msgId, string path) {
-            await Task.Delay(300);
-            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () => {
-                try {
-                    var bitmap = new BitmapImage();
-                    var file = await StorageFile.GetFileFromPathAsync(path);
-                    using (var stream = await file.OpenReadAsync()) {
-                        await bitmap.SetSourceAsync(stream);
-                        if (_messagesDict.ContainsKey(msgId)) _messagesDict[msgId].AttachedPhoto = bitmap;
-                    }
-                } catch { }
-            });
+            try {
+                var bitmap = new BitmapImage();
+                using (var s = await (await StorageFile.GetFileFromPathAsync(path)).OpenReadAsync()) {
+                    await bitmap.SetSourceAsync(s);
+                    if (_messagesDict.ContainsKey(msgId)) { _messagesDict[msgId].AttachedPhoto = bitmap; _messagesDict[msgId].OnPropertyChanged("PhotoVisibility"); }
+                }
+            } catch (Exception ex) { Log("Photo Error: " + ex.Message); }
         }
 
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
-            var chat = (ChatItem)e.ClickedItem;
-            _currentChatId = chat.Id;
-            CurrentChatTitle.Text = chat.Title;
-            _messageItems.Clear();
-            _messagesDict.Clear();
-            StartPanel.Visibility = Visibility.Collapsed;
-            MessagesPanel.Visibility = Visibility.Visible;
-            TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50,\"only_local\":false}");
+            var chat = (ChatItem)e.ClickedItem; _currentChatId = chat.Id; CurrentChatTitle.Text = chat.Title;
+            _messageItems.Clear(); _messagesDict.Clear(); StartPanel.Visibility = Visibility.Collapsed; MessagesPanel.Visibility = Visibility.Visible;
+            TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
         }
 
         private void SendMessage_Click(object sender, RoutedEventArgs e) {
-            if (string.IsNullOrWhiteSpace(MessageInput.Text) || _currentChatId == 0) return;
-            JObject req = new JObject {
-                ["@type"] = "sendMessage",
-                ["chat_id"] = _currentChatId,
-                ["input_message_content"] = new JObject {
-                    ["@type"] = "inputMessageText",
-                    ["text"] = new JObject { ["@type"] = "formattedText", ["text"] = MessageInput.Text }
-                }
-            };
-            TdJson.SendUtf8(_client, req.ToString());
-            MessageInput.Text = "";
+            if (string.IsNullOrWhiteSpace(MessageInput.Text)) return;
+            JObject req = new JObject { ["@type"] = "sendMessage", ["chat_id"] = _currentChatId, ["input_message_content"] = new JObject { ["@type"] = "inputMessageText", ["text"] = new JObject { ["@type"] = "formattedText", ["text"] = MessageInput.Text } } };
+            TdJson.SendUtf8(_client, req.ToString()); MessageInput.Text = "";
         }
 
-        private void BackButton_Click(object sender, RoutedEventArgs e) {
-            _currentChatId = 0;
-            MessagesPanel.Visibility = Visibility.Collapsed;
-            StartPanel.Visibility = Visibility.Visible;
-        }
-
-        private void SendPhone_Click(object sender, RoutedEventArgs e) =>
-            TdJson.SendUtf8(_client, "{\"@type\":\"setAuthenticationPhoneNumber\",\"phone_number\":\"" + PhoneInput.Text + "\"}");
-
-        private void SendCode_Click(object sender, RoutedEventArgs e) =>
-            TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
+        private void BackButton_Click(object sender, RoutedEventArgs e) { _currentChatId = 0; MessagesPanel.Visibility = Visibility.Collapsed; StartPanel.Visibility = Visibility.Visible; }
+        private void SendPhone_Click(object sender, RoutedEventArgs e) => TdJson.SendUtf8(_client, "{\"@type\":\"setAuthenticationPhoneNumber\",\"phone_number\":\"" + PhoneInput.Text + "\"}");
+        private void SendCode_Click(object sender, RoutedEventArgs e) => TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
+        private void CopyLog_Click(object sender, RoutedEventArgs e) { var p = new DataPackage(); p.SetText(DebugConsole.Text); Clipboard.SetContent(p); }
     }
 }

@@ -10,17 +10,21 @@ namespace TelegramWP10
         public static extern IntPtr td_json_client_create();
 
         [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void td_json_client_send(IntPtr client, [MarshalAs(UnmanagedType.LPStr)] string request);
+        public static extern void td_json_client_send(IntPtr client, IntPtr request);
 
         [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr td_json_client_receive(IntPtr client, double timeout);
 
-        [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void td_json_client_destroy(IntPtr client);
-
         public static void SendUtf8(IntPtr client, string request)
         {
-            td_json_client_send(client, request);
+            byte[] bytes = Encoding.UTF8.GetBytes(request + "\0");
+            IntPtr ptr = Marshal.AllocHGlobal(bytes.Length);
+            try {
+                Marshal.Copy(bytes, 0, ptr, bytes.Length);
+                td_json_client_send(client, ptr);
+            } finally {
+                Marshal.FreeHGlobal(ptr);
+            }
         }
 
         public static string IntPtrToStringUtf8(IntPtr ptr)
