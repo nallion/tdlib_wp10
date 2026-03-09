@@ -146,6 +146,13 @@ namespace TelegramWP10
                 case "updateNewChat":
                     var c = update["chat"];
                     long chatId = (long)c["id"];
+                    // Если пришёл updateNewChat — значит уже авторизованы (сессия сохранена)
+                    // Показываем список чатов если он ещё скрыт
+                    if (ChatListView.Visibility == Visibility.Collapsed && LoginPanel.Visibility == Visibility.Visible) {
+                        LoginPanel.Visibility = Visibility.Collapsed;
+                        ChatListView.Visibility = Visibility.Visible;
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
+                    }
                     if (!_chatsDict.ContainsKey(chatId))
                         _chatsDict[chatId] = new ChatItem { Id = chatId, Title = c["title"]?.ToString() };
                     var phSmall = c["photo"]?["small"];
