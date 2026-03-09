@@ -99,7 +99,10 @@
 
             <StackPanel Orientation="Horizontal" Background="#0088cc" Padding="10">
                 <Button Content="←" Click="BackButton_Click" Foreground="White" Background="Transparent" FontSize="20"/>
-                <TextBlock x:Name="CurrentChatTitle" Text="Чат" Foreground="White" FontSize="18" VerticalAlignment="Center" Margin="10,0"/>
+                <StackPanel VerticalAlignment="Center" Margin="10,0">
+                    <TextBlock x:Name="CurrentChatTitle" Text="Чат" Foreground="White" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="CurrentChatStatus" Text="" Foreground="#CCE8FF" FontSize="13"/>
+                </StackPanel>
             </StackPanel>
 
             <ListView x:Name="MessagesListView" Grid.Row="1" SelectionMode="None" Padding="10" IsItemClickEnabled="True" ItemClick="MessagesListView_ItemClick" Visibility="Collapsed">

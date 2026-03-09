@@ -16,6 +16,7 @@ namespace TelegramWP10
         private ObservableCollection<ChatItem> _chatListItems = new ObservableCollection<ChatItem>();
         private ObservableCollection<MessageItem> _messageItems = new ObservableCollection<MessageItem>();
         private Dictionary<long, ChatItem> _chatsDict = new Dictionary<long, ChatItem>();
+        private Dictionary<long, JToken> _usersDict = new Dictionary<long, JToken>(); // userId → user object
         private Dictionary<long, long> _fileToChatId = new Dictionary<long, long>();
         private Dictionary<long, long> _fileToMsgId = new Dictionary<long, long>();
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
@@ -267,9 +268,15 @@ namespace TelegramWP10
                 case "updateUser":
                     var user = update["user"];
                     long uid = user?["id"]?.ToObject<long>() ?? 0;
-                    if (uid != 0 && _chatsDict.ContainsKey(uid)) {
-                        string uStatus = user["status"]?["@type"]?.ToString();
-                        _chatsDict[uid].IsOnline = uStatus == "userStatusOnline";
+                    if (uid != 0) {
+                        _usersDict[uid] = user;
+                        if (_chatsDict.ContainsKey(uid)) {
+                            string uStatus = user["status"]?["@type"]?.ToString();
+                            _chatsDict[uid].IsOnline = uStatus == "userStatusOnline";
+                        }
+                        // Обновляем шапку если открыт чат с этим пользователем
+                        if (uid == _currentChatId)
+                            UpdateChatStatus(user["status"]);
                     }
                     break;
 
@@ -277,10 +284,11 @@ namespace TelegramWP10
                     long userId = update["user_id"]?.ToObject<long>() ?? 0;
                     string statusType = update["status"]?["@type"]?.ToString();
                     bool isOnline = statusType == "userStatusOnline";
-                    // Ищем чат с этим пользователем
-                    foreach (var kvp in _chatsDict) {
-                        if (kvp.Key == userId) { kvp.Value.IsOnline = isOnline; break; }
-                    }
+                    if (_chatsDict.ContainsKey(userId))
+                        _chatsDict[userId].IsOnline = isOnline;
+                    // Обновляем шапку если открыт чат с этим пользователем
+                    if (userId == _currentChatId)
+                        UpdateChatStatus(update["status"]);
                     break;
 
                 case "updateChatLastMessage":
@@ -365,6 +373,47 @@ namespace TelegramWP10
                 if (result != null) return result;
             }
             return null;
+        }
+
+        private void UpdateChatStatus(JToken status) {
+            if (status == null) { CurrentChatStatus.Text = ""; return; }
+            string type = status["@type"]?.ToString();
+            string text = "";
+            switch (type) {
+                case "userStatusOnline":
+                    text = "в сети";
+                    CurrentChatStatus.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.LightGreen);
+                    break;
+                case "userStatusOffline":
+                    long wasOnline = status["was_online"]?.ToObject<long>() ?? 0;
+                    text = wasOnline > 0 ? "был(а) " + FormatLastSeen(wasOnline) : "не в сети";
+                    CurrentChatStatus.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 204, 232, 255));
+                    break;
+                case "userStatusRecently":
+                    text = "был(а) недавно";
+                    CurrentChatStatus.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 204, 232, 255));
+                    break;
+                case "userStatusLastWeek":
+                    text = "был(а) на этой неделе";
+                    CurrentChatStatus.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 204, 232, 255));
+                    break;
+                case "userStatusLastMonth":
+                    text = "был(а) в этом месяце";
+                    CurrentChatStatus.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 204, 232, 255));
+                    break;
+            }
+            CurrentChatStatus.Text = text;
+        }
+
+        private string FormatLastSeen(long unixTime) {
+            var dt = DateTimeOffset.FromUnixTimeSeconds(unixTime).LocalDateTime;
+            var now = DateTime.Now;
+            var diff = now - dt;
+            if (diff.TotalMinutes < 1) return "только что";
+            if (diff.TotalMinutes < 60) return (int)diff.TotalMinutes + " мин. назад";
+            if (diff.TotalHours < 24 && dt.Day == now.Day) return "сегодня в " + dt.ToString("HH:mm");
+            if ((now - dt).TotalDays < 2 && dt.Day == now.AddDays(-1).Day) return "вчера в " + dt.ToString("HH:mm");
+            return dt.ToString("d MMM в HH:mm");
         }
 
         private void FillChatLastMessage(ChatItem item, JToken msg, JToken chatOrUpdate) {
@@ -499,6 +548,11 @@ namespace TelegramWP10
             StartPanel.Visibility = Visibility.Collapsed;
             MessagesPanel.Visibility = Visibility.Visible;
             CurrentChatTitle.Text = chat.Title;
+            // Показываем статус если это личный чат
+            if (_usersDict.ContainsKey(_currentChatId))
+                UpdateChatStatus(_usersDict[_currentChatId]["status"]);
+            else
+                CurrentChatStatus.Text = "";
             _isLoadingHistory = true;
             LoadingIndicator.Visibility = Visibility.Visible;
             MessagesListView.Visibility = Visibility.Collapsed;
