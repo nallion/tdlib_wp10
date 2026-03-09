@@ -1,116 +1,42 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Threading.Tasks;
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
-using Newtonsoft.Json.Linq;
+<Page
+    x:Class="TelegramWP10.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TelegramWP10"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-namespace TelegramWP10
-{
-    public sealed partial class MainPage : Page
-    {
-        private IntPtr _client;
-        private ObservableCollection<ChatItem> _chatListItems = new ObservableCollection<ChatItem>();
-        private Dictionary<long, ChatItem> _chatsDict = new Dictionary<long, ChatItem>();
-        private Dictionary<int, long> _fileToChatId = new Dictionary<int, long>();
+    <Grid>
+        <StackPanel Padding="20">
+            <TextBlock x:Name="StatusText" Text="Загрузка..." Margin="0,0,0,10" Foreground="Gray" TextWrapping="Wrap"/>
 
-        public MainPage()
-        {
-            this.InitializeComponent();
-            _client = TdJson.td_json_client_create();
-            ChatListView.ItemsSource = _chatListItems;
-            Task.Run(() => LongPolling());
-            SendParameters();
-        }
+            <StackPanel x:Name="LoginPanel">
+                <TextBox x:Name="PhoneInput" Header="Телефон" PlaceholderText="+7..." InputScope="TelephoneNumber"/>
+                <Button Content="Далее" Click="SendPhone_Click" HorizontalAlignment="Stretch" Margin="0,10"/>
+                <TextBox x:Name="CodeInput" Header="Код" Visibility="Collapsed" Margin="0,10"/>
+                <Button x:Name="CodeButton" Content="Войти" Click="SendCode_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
+            </StackPanel>
 
-        private void SendParameters()
-        {
-            string path = Windows.Storage.ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
-            // УКАЖИТЕ СВОИ ДАННЫЕ НИЖЕ
-            string json = "{\"@type\":\"setTdlibParameters\",\"use_test_dc\":false,\"database_directory\":\"" + path + "/db\",\"files_directory\":\"" + path + "/files\",\"api_id\":26688287,\"api_hash\":\"5f4afe72bc71dc6ec40f7dcb0c9a822b\",\"system_language_code\":\"ru\",\"device_model\":\"Lumia\",\"system_version\":\"WP10\",\"application_version\":\"1.0\"}";
-            TdJson.td_json_client_send(_client, json);
-        }
-
-        private void LongPolling()
-        {
-            while (true)
-            {
-                IntPtr resPtr = TdJson.td_json_client_receive(_client, 1.0);
-                if (resPtr != IntPtr.Zero)
-                {
-                    string json = TdJson.IntPtrToStringUtf8(resPtr);
-                    try {
-                        var update = JObject.Parse(json);
-                        string type = update["@type"]?.ToString();
-                        
-                        // КРИТИЧНО: Все изменения UI и коллекций только через Dispatcher!
-                        var ignored = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                            HandleUpdate(type, update);
-                        });
-                    } catch { }
-                }
-            }
-        }
-
-        private void HandleUpdate(string type, JObject update)
-        {
-            try {
-                switch (type)
-                {
-                    case "updateAuthorizationState":
-                        var state = update["authorization_state"]?["@type"]?.ToString();
-                        if (state == "authorizationStateWaitCode") {
-                            CodeInput.Visibility = Visibility.Visible;
-                            CodeButton.Visibility = Visibility.Visible;
-                            StatusText.Text = "Введите код:";
-                        }
-                        else if (state == "authorizationStateReady") {
-                            LoginPanel.Visibility = Visibility.Collapsed;
-                            ChatListView.Visibility = Visibility.Visible;
-                            StatusText.Text = "Ваши чаты:";
-                            TdJson.td_json_client_send(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":20}");
-                        }
-                        break;
-
-                    case "updateNewChat":
-                        var chat = update["chat"];
-                        if (chat == null) return;
-                        long id = (long)chat["id"];
-                        
-                        if (!_chatsDict.ContainsKey(id)) {
-                            var item = new ChatItem { Id = id, Title = chat["title"]?.ToString() ?? "Unknown" };
-                            _chatsDict[id] = item;
-                            _chatListItems.Add(item);
-
-                            if (chat["photo"]?["small"] != null) {
-                                int fId = (int)chat["photo"]["small"]["id"];
-                                _fileToChatId[fId] = id;
-                                TdJson.td_json_client_send(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":1}");
-                            }
-                        }
-                        break;
-
-                    case "updateFile":
-                        var file = update["file"];
-                        if (file == null) return;
-                        int fileId = (int)file["id"];
-                        if (file["local"]?["is_completed"]?.Value<bool>() == true && _fileToChatId.ContainsKey(fileId)) {
-                            long cId = _fileToChatId[fileId];
-                            if (_chatsDict.ContainsKey(cId))
-                                _chatsDict[cId].PhotoPath = file["local"]["path"]?.ToString();
-                        }
-                        break;
-                }
-            } catch (Exception ex) {
-                StatusText.Text = "Ошибка: " + ex.Message;
-            }
-        }
-
-        private void SendPhone_Click(object sender, RoutedEventArgs e) =>
-            TdJson.td_json_client_send(_client, "{\"@type\":\"setAuthenticationPhoneNumber\",\"phone_number\":\"" + PhoneInput.Text + "\"}");
-
-        private void SendCode_Click(object sender, RoutedEventArgs e) =>
-            TdJson.td_json_client_send(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
-    }
-}
+            <ListView x:Name="ChatListView" Height="600" Visibility="Collapsed" SelectionMode="None">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="local:ChatItem">
+                        <Grid Margin="0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Ellipse Width="50" Height="50">
+                                <Ellipse.Fill>
+                                    <ImageBrush ImageSource="{Binding PhotoPath}"/>
+                                </Ellipse.Fill>
+                            </Ellipse>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="15,0,0,0">
+                                <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="Чат активен" FontSize="12" Foreground="Gray"/>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </StackPanel>
+    </Grid>
+</Page>
