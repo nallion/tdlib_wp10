@@ -102,7 +102,7 @@
                 <TextBlock x:Name="CurrentChatTitle" Text="Чат" Foreground="White" FontSize="18" VerticalAlignment="Center" Margin="10,0"/>
             </StackPanel>
 
-            <ListView x:Name="MessagesListView" Grid.Row="1" SelectionMode="None" Padding="10" IsItemClickEnabled="True" ItemClick="MessagesListView_ItemClick" Visibility="Collapsed" SizeChanged="MessagesListView_SizeChanged">
+            <ListView x:Name="MessagesListView" Grid.Row="1" SelectionMode="None" Padding="10" IsItemClickEnabled="True" ItemClick="MessagesListView_ItemClick" Visibility="Collapsed">
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>

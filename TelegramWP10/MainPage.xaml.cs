@@ -25,7 +25,6 @@ namespace TelegramWP10
         private bool _connectionReady = false;
         private bool _isAuthorized = false;
         private bool _isLoadingHistory = false;
-        private bool _needScrollToBottom = false;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
 
@@ -233,7 +232,8 @@ namespace TelegramWP10
                         var newItem = ParseMessage(newMsg);
                         if (newItem != null) {
                             _messageItems.Add(newItem);
-                            ScrollToBottom();
+                            MessagesListView.UpdateLayout();
+                            MessagesListView.ScrollIntoView(newItem);
                         }
                     }
                     break;
@@ -341,23 +341,14 @@ namespace TelegramWP10
                     }
                     Log("rendered " + _messageItems.Count + " messages");
                     _isLoadingHistory = false;
-                    _needScrollToBottom = true;
                     LoadingIndicator.Visibility = Visibility.Collapsed;
                     MessagesListView.Visibility = Visibility.Visible;
+                    if (_messageItems.Count > 0) {
+                        MessagesListView.UpdateLayout();
+                        MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
+                    }
                     break;
             }
-        }
-
-        private void MessagesListView_SizeChanged(object sender, SizeChangedEventArgs e) {
-            if (_needScrollToBottom) {
-                _needScrollToBottom = false;
-                ScrollToBottom();
-            }
-        }
-
-        private void ScrollToBottom() {
-            var sv = FindScrollViewer(MessagesListView);
-            sv?.ScrollToVerticalOffset(sv.ScrollableHeight);
         }
 
         private ScrollViewer FindScrollViewer(DependencyObject element) {
@@ -506,8 +497,6 @@ namespace TelegramWP10
             LoadingIndicator.Visibility = Visibility.Visible;
             MessagesListView.Visibility = Visibility.Collapsed;
             Log("OPEN CHAT id=" + _currentChatId + " title=" + chat.Title);
-            if (_chatsDict.ContainsKey(_currentChatId))
-                _chatsDict[_currentChatId].UnreadCount = 0;
             // openChat запускает синхронизацию истории с сервером
             TdJson.SendUtf8(_client, "{\"@type\":\"openChat\",\"chat_id\":" + _currentChatId + "}");
             TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
