@@ -8,6 +8,7 @@ using Windows.UI.Xaml.Media.Imaging;
 using Newtonsoft.Json.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using Windows.Storage;
 
 namespace TelegramWP10
 {
@@ -17,7 +18,10 @@ namespace TelegramWP10
         private ObservableCollection<ChatItem> _chatListItems = new ObservableCollection<ChatItem>();
         private ObservableCollection<MessageItem> _messageItems = new ObservableCollection<MessageItem>();
         private Dictionary<long, ChatItem> _chatsDict = new Dictionary<long, ChatItem>();
-        private Dictionary<int, long> _fileToChatId = new Dictionary<int, long>();
+        
+        // ИСПРАВЛЕНО: long для ID файлов, чтобы не было обрезания
+        private Dictionary<long, long> _fileToChatId = new Dictionary<long, long>();
+        
         private long _currentChatId = 0;
 
         public MainPage()
@@ -32,12 +36,12 @@ namespace TelegramWP10
 
         private void SendParameters()
         {
-            string path = Windows.Storage.ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
+            string path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v11", // Новая версия базы для чистого теста
-                ["files_directory"] = path + "/td_files_v11",
+                ["database_directory"] = path + "/td_db_v12", 
+                ["files_directory"] = path + "/td_files_v12",
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
@@ -96,13 +100,14 @@ namespace TelegramWP10
                         
                         var photo = c["photo"]?["small"];
                         if (photo != null) {
-                            int fId = (int)photo["id"];
+                            long fId = (long)photo["id"]; // ИСПРАВЛЕНО: long
                             _fileToChatId[fId] = id;
                             string lp = photo["local"]?["path"]?.ToString();
                             if (!string.IsNullOrEmpty(lp) && (bool)photo["local"]["is_completed"]) {
-                                UpdateAvatar(id, lp);
+                                var ignored = UpdateAvatar(id, lp);
                             } else {
-                                TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":1}");
+                                // ИСПРАВЛЕНО: приоритет 5 для быстрой загрузки
+                                TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":5}");
                             }
                         }
                     }
@@ -111,9 +116,9 @@ namespace TelegramWP10
                 case "updateFile":
                     var f = update["file"];
                     if (f != null && f["local"]?["is_completed"]?.Value<bool>() == true) {
-                        int fid = (int)f["id"];
+                        long fid = (long)f["id"]; // ИСПРАВЛЕНО: long
                         if (_fileToChatId.ContainsKey(fid)) {
-                            UpdateAvatar(_fileToChatId[fid], f["local"]["path"]?.ToString());
+                            var ignored = UpdateAvatar(_fileToChatId[fid], f["local"]["path"]?.ToString());
                         }
                     }
                     break;
@@ -153,18 +158,17 @@ namespace TelegramWP10
             }
         }
 
-        private void UpdateAvatar(long chatId, string path) {
+        // ИСПРАВЛЕНО: Асинхронная загрузка через StorageFile для надежности
+        private async Task UpdateAvatar(long chatId, string path) {
             if (string.IsNullOrEmpty(path)) return;
             try {
-                // ДЕБАГ ЛОГ
-                DebugText.Text = "Path: " + path.Substring(Math.Max(0, path.Length - 30));
-
-                string localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
-                string relativePath = path.Replace(localFolder, "").Replace("\\", "/");
-                string finalUri = "ms-appdata:///local" + relativePath;
-
-                // Важно: обновление Photo вызовет OnPropertyChanged в ChatItem
-                _chatsDict[chatId].Photo = new BitmapImage(new Uri(finalUri));
+                var file = await StorageFile.GetFileFromPathAsync(path);
+                using (var stream = await file.OpenReadAsync()) {
+                    var bitmap = new BitmapImage();
+                    await bitmap.SetSourceAsync(stream);
+                    _chatsDict[chatId].Photo = bitmap;
+                }
+                DebugText.Text = "Avatar OK: " + chatId;
             } catch (Exception ex) {
                 DebugText.Text = "Avatar Err: " + ex.Message;
             }
