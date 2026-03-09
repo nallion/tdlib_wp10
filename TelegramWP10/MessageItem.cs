@@ -11,6 +11,7 @@ namespace TelegramWP10
         public string Date { get; set; }
         public HorizontalAlignment Alignment { get; set; }
         public string Background { get; set; }
+        public string FilePath { get; set; } // путь к файлу видео для открытия
 
         private string _replyToText;
         public string ReplyToText { get => _replyToText; set { _replyToText = value; OnPropertyChanged("ReplyToText"); OnPropertyChanged("ReplyVisibility"); } }

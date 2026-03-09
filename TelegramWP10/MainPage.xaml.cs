@@ -176,12 +176,32 @@ namespace TelegramWP10
                         // Фикс: показываем файл если path есть, независимо от is_completed
                         if (fid != 0 && !string.IsNullOrEmpty(fpath)) {
                             if (_fileToChatId.ContainsKey(fid)) { Log("→ Avatar chat=" + _fileToChatId[fid]); var t = UpdateAvatar(_fileToChatId[fid], fpath); }
-                            if (_fileToMsgId.ContainsKey(fid)) { Log("→ Photo msg=" + _fileToMsgId[fid]); var t = UpdateMessagePhoto(_fileToMsgId[fid], fpath); }
+                            if (_fileToMsgId.ContainsKey(fid)) {
+                                long mid = _fileToMsgId[fid];
+                                Log("→ Photo/Video msg=" + mid);
+                                var t = UpdateMessagePhoto(mid, fpath);
+                                // Если это видеофайл — сохраняем путь для открытия
+                                if (_messagesDict.ContainsKey(mid) && _messagesDict[mid].IsVideo)
+                                    _messagesDict[mid].FilePath = fpath;
+                            }
                         }
                     }
                     break;
 
-                case "chats":
+                case "updateNewMessage":
+                    var newMsg = update["message"];
+                    long newMsgChatId = newMsg?["chat_id"]?.ToObject<long>() ?? 0;
+                    Log("updateNewMessage chat=" + newMsgChatId + " current=" + _currentChatId);
+                    if (newMsgChatId == _currentChatId && newMsg != null) {
+                        var newItem = ParseMessage(newMsg);
+                        if (newItem != null) {
+                            _messageItems.Add(newItem);
+                            MessagesListView.ScrollIntoView(newItem);
+                        }
+                    }
+                    break;
+
+
                     Log("chats count=" + (update["chat_ids"] as JArray)?.Count);
                     foreach (var cId in update["chat_ids"]) {
                         long cid = (long)cId;
@@ -206,6 +226,8 @@ namespace TelegramWP10
                         }
                     }
                     Log("rendered " + _messageItems.Count + " messages");
+                    if (_messageItems.Count > 0)
+                        MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
                     break;
             }
         }
@@ -251,17 +273,28 @@ namespace TelegramWP10
                     }
                 } else if (type == "messageVideo") {
                     item.IsVideo = true;
+                    // Сначала пробуем получить сам видеофайл
+                    var videoFile = content["video"]?["video"] as JObject;
                     var thumb = content["video"]?["thumbnail"]?["file"] as JObject;
-                    if (thumb != null) {
-                        long vfid = (long)thumb["id"];
+                    if (videoFile != null) {
+                        long vfid = (long)videoFile["id"];
                         _fileToMsgId[vfid] = msgId;
                         _messagesDict[msgId] = item;
-                        string vPath = thumb["local"]?["path"]?.ToString();
-                        Log("VIDEO msg=" + msgId + " file_id=" + vfid + " path=" + vPath);
-                        if (!string.IsNullOrEmpty(vPath))
-                            { var t = UpdateMessagePhoto(msgId, vPath); }
+                        string vPath = videoFile["local"]?["path"]?.ToString();
+                        Log("VIDEO file id=" + vfid + " path=" + vPath);
+                        if (!string.IsNullOrEmpty(vPath)) item.FilePath = vPath;
+                        // Скачиваем видео только если оно уже частично загружено (не трогаем большие файлы)
+                    }
+                    if (thumb != null) {
+                        long tfid = (long)thumb["id"];
+                        _fileToMsgId[tfid] = msgId;
+                        _messagesDict[msgId] = item;
+                        string tPath = thumb["local"]?["path"]?.ToString();
+                        Log("VIDEO thumb id=" + tfid + " path=" + tPath);
+                        if (!string.IsNullOrEmpty(tPath))
+                            { var t = UpdateMessagePhoto(msgId, tPath); }
                         else
-                            TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + vfid + ",\"priority\":10,\"synchronous\":false}");
+                            TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + tfid + ",\"priority\":10,\"synchronous\":false}");
                     }
                 }
 
@@ -328,6 +361,29 @@ namespace TelegramWP10
             };
             TdJson.SendUtf8(_client, req.ToString());
             MessageInput.Text = "";
+        }
+
+        private async void VideoPlay_Click(object sender, RoutedEventArgs e) {
+            var btn = sender as Button;
+            var item = btn?.DataContext as MessageItem;
+            if (item == null || string.IsNullOrEmpty(item.FilePath)) {
+                // Файл ещё не скачан — скачиваем
+                if (item != null) {
+                    Log("VIDEO click — file not ready, downloading");
+                    // Ищем file_id для этого сообщения
+                    foreach (var kv in _fileToMsgId)
+                        if (kv.Value == item.Id) {
+                            TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + kv.Key + ",\"priority\":32,\"synchronous\":false}");
+                            break;
+                        }
+                }
+                return;
+            }
+            try {
+                var file = await StorageFile.GetFileFromPathAsync(item.FilePath);
+                await Windows.System.Launcher.LaunchFileAsync(file);
+                Log("VIDEO launched: " + item.FilePath);
+            } catch (Exception ex) { Log("VIDEO launch ERR: " + ex.Message); }
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) {
