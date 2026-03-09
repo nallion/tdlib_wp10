@@ -19,9 +19,8 @@ namespace TelegramWP10
         private ObservableCollection<MessageItem> _messageItems = new ObservableCollection<MessageItem>();
         private Dictionary<long, ChatItem> _chatsDict = new Dictionary<long, ChatItem>();
         
-        // ИСПРАВЛЕНО: long для ID файлов, чтобы не было обрезания
+        // Исправлено: Словарь на long ID
         private Dictionary<long, long> _fileToChatId = new Dictionary<long, long>();
-        
         private long _currentChatId = 0;
 
         public MainPage()
@@ -40,8 +39,8 @@ namespace TelegramWP10
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v12", 
-                ["files_directory"] = path + "/td_files_v12",
+                ["database_directory"] = path + "/td_db_v13", // Новая версия для чистого теста
+                ["files_directory"] = path + "/td_files_v13",
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
@@ -100,13 +99,13 @@ namespace TelegramWP10
                         
                         var photo = c["photo"]?["small"];
                         if (photo != null) {
-                            long fId = (long)photo["id"]; // ИСПРАВЛЕНО: long
+                            long fId = (long)photo["id"]; // Каст в long
                             _fileToChatId[fId] = id;
                             string lp = photo["local"]?["path"]?.ToString();
                             if (!string.IsNullOrEmpty(lp) && (bool)photo["local"]["is_completed"]) {
                                 var ignored = UpdateAvatar(id, lp);
                             } else {
-                                // ИСПРАВЛЕНО: приоритет 5 для быстрой загрузки
+                                // Приоритет 5 для аватарок
                                 TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":5}");
                             }
                         }
@@ -115,8 +114,8 @@ namespace TelegramWP10
 
                 case "updateFile":
                     var f = update["file"];
-                    if (f != null && f["local"]?["is_completed"]?.Value<bool>() == true) {
-                        long fid = (long)f["id"]; // ИСПРАВЛЕНО: long
+                    if (f != null && (bool)f["local"]["is_completed"]) {
+                        long fid = (long)f["id"];
                         if (_fileToChatId.ContainsKey(fid)) {
                             var ignored = UpdateAvatar(_fileToChatId[fid], f["local"]["path"]?.ToString());
                         }
@@ -158,7 +157,7 @@ namespace TelegramWP10
             }
         }
 
-        // ИСПРАВЛЕНО: Асинхронная загрузка через StorageFile для надежности
+        // Прямая загрузка через StorageFile
         private async Task UpdateAvatar(long chatId, string path) {
             if (string.IsNullOrEmpty(path)) return;
             try {
@@ -166,12 +165,9 @@ namespace TelegramWP10
                 using (var stream = await file.OpenReadAsync()) {
                     var bitmap = new BitmapImage();
                     await bitmap.SetSourceAsync(stream);
-                    _chatsDict[chatId].Photo = bitmap;
+                    _chatsDict[chatId].Photo = bitmap; // Это вызовет PropertyChanged
                 }
-                DebugText.Text = "Avatar OK: " + chatId;
-            } catch (Exception ex) {
-                DebugText.Text = "Avatar Err: " + ex.Message;
-            }
+            } catch { }
         }
 
         private MessageItem ParseMessage(JToken msg)

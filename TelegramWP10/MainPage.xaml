@@ -19,7 +19,7 @@
 
             <ListView x:Name="ChatListView" Height="550" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
                 <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="local:ChatItem">
+                    <DataTemplate>
                         <Grid Margin="0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="60"/>
@@ -27,10 +27,10 @@
                             </Grid.ColumnDefinitions>
                             <Ellipse Width="50" Height="50">
                                 <Ellipse.Fill>
-                                    <ImageBrush ImageSource="{x:Bind Photo, Mode=OneWay}"/>
+                                    <ImageBrush ImageSource="{Binding Photo, Mode=OneWay}"/>
                                 </Ellipse.Fill>
                             </Ellipse>
-                            <TextBlock Grid.Column="1" Text="{x:Bind Title, Mode=OneWay}" VerticalAlignment="Center" Margin="5,0" FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="5,0" FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
@@ -51,11 +51,11 @@
             
             <ListView x:Name="MessagesListView" Grid.Row="1" SelectionMode="None" Padding="10">
                 <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="local:MessageItem">
-                        <Border Background="{x:Bind Background, Mode=OneWay}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{x:Bind Alignment, Mode=OneWay}">
+                    <DataTemplate>
+                        <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}">
                             <StackPanel>
-                                <TextBlock Text="{x:Bind Text, Mode=OneWay}" TextWrapping="Wrap" MaxWidth="240" Foreground="White" FontSize="16"/>
-                                <TextBlock Text="{x:Bind Date, Mode=OneWay}" FontSize="10" Foreground="#AAAAAA" HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxWidth="240" Foreground="White" FontSize="16"/>
+                                <TextBlock Text="{Binding Date}" FontSize="10" Foreground="#AAAAAA" HorizontalAlignment="Right" Margin="0,2,0,0"/>
                             </StackPanel>
                         </Border>
                     </DataTemplate>
