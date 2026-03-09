@@ -356,19 +356,19 @@ namespace TelegramWP10
                 case "messages":
                     long expectedChat = _pendingHistoryChatId;
                     var msgs = update["messages"] as JArray;
-                    Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count);
+                    int totalCount = update["total_count"]?.ToObject<int>() ?? 0;
+                    Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count + " total=" + totalCount);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
-                    // TDLib шлёт мало сообщений когда база ещё не синхронизирована — повторяем
-                    if (msgs == null || msgs.Count < 10) {
-                        int gotCount = msgs?.Count ?? 0;
-                        Log("messages too few (" + gotCount + ") — retrying after delay");
+                    int gotCount = msgs?.Count ?? 0;
+                    // Retry только если total_count обещает больше чем пришло — иначе сообщений реально столько
+                    if (gotCount < 10 && totalCount > gotCount) {
+                        Log("messages too few (" + gotCount + "/" + totalCount + ") — retrying after delay");
                         var retryChat = _currentChatId;
                         Task.Delay(800).ContinueWith(_ =>
                             Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                                 if (_currentChatId == retryChat)
                                     TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + retryChat + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
                             }));
-                        // Не показываем частичный результат — ждём полного
                         break;
                     }
                     _messageItems.Clear();
