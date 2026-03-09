@@ -8,7 +8,7 @@ namespace TelegramWP10
         public long Id { get; set; }
         public string Title { get; set; }
         
-        private string _photoPath = "ms-appx:///Assets/Square44x44Logo.png"; // Заглушка пока фото качается
+        private string _photoPath = "ms-appx:///Assets/Square44x44Logo.png"; 
         public string PhotoPath 
         { 
             get => _photoPath; 
@@ -16,7 +16,7 @@ namespace TelegramWP10
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
-        void OnPropertyChanged([CallerMemberName] string prop = "") => 
+        private void OnPropertyChanged([CallerMemberName] string prop = "") => 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(prop));
     }
 }
