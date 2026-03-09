@@ -25,7 +25,6 @@ namespace TelegramWP10
         private bool _connectionReady = false;
         private bool _isAuthorized = false;
         private bool _isLoadingHistory = false;
-        private long _pendingChatHistoryId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
 
@@ -242,11 +241,6 @@ namespace TelegramWP10
                     if (connState == "connectionStateReady") {
                         _connectionReady = true;
                         ConnectionStatus.Visibility = Visibility.Collapsed;
-                        // Если есть отложенный запрос истории — выполняем
-                        if (_pendingChatHistoryId != 0) {
-                            TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _pendingChatHistoryId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
-                            _pendingChatHistoryId = 0;
-                        }
                     } else {
                         _connectionReady = false;
                         string connText = connState == "connectionStateConnecting" ? "Подключение..."
@@ -472,12 +466,7 @@ namespace TelegramWP10
             LoadingIndicator.Visibility = Visibility.Visible;
             MessagesListView.Visibility = Visibility.Collapsed;
             Log("OPEN CHAT id=" + _currentChatId + " title=" + chat.Title);
-            if (_connectionReady) {
-                TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
-            } else {
-                _pendingChatHistoryId = _currentChatId;
-                Log("OPEN CHAT deferred — waiting for connection");
-            }
+            TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
         }
 
         private void SendMessage_Click(object sender, RoutedEventArgs e) {
