@@ -35,6 +35,13 @@ namespace TelegramWP10
             _client = TdJson.td_json_client_create();
             ChatListView.ItemsSource = _chatListItems;
             MessagesListView.ItemsSource = _messageItems;
+            // Сбрасываем UI в начальное состояние (на случай restore после suspend)
+            LoginPanel.Visibility = Visibility.Visible;
+            ChatListView.Visibility = Visibility.Collapsed;
+            MessagesPanel.Visibility = Visibility.Collapsed;
+            StartPanel.Visibility = Visibility.Visible;
+            LoadingIndicator.Visibility = Visibility.Collapsed;
+            MessagesListView.Visibility = Visibility.Collapsed;
             InitAsync();
         }
 
@@ -252,6 +259,7 @@ namespace TelegramWP10
                         if (_chatsDict.ContainsKey(cid) && !_chatListItems.Contains(_chatsDict[cid]))
                             _chatListItems.Add(_chatsDict[cid]);
                     }
+                    ChatCountText.Text = _chatListItems.Count.ToString();
                     Log("chats after fill _chatListItems=" + _chatListItems.Count);
                     break;
 

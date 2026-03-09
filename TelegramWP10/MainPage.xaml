@@ -25,9 +25,16 @@
 
             <ListView x:Name="ChatListView" Grid.Row="1" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
                 <ListView.Header>
-                    <Border x:Name="ConnectionStatus" Background="#CC880000" Padding="10,6" Visibility="Collapsed" HorizontalAlignment="Stretch">
-                        <TextBlock x:Name="ConnectionStatusText" Text="Подключение..." Foreground="White" FontSize="13" TextAlignment="Center"/>
-                    </Border>
+                    <StackPanel Background="#1A1A1A">
+                        <TextBlock Text="Telegram" Foreground="White" FontSize="28" FontWeight="Bold" Margin="15,15,15,2"/>
+                        <StackPanel Orientation="Horizontal" Margin="15,0,15,10">
+                            <TextBlock Text="Чатов: " Foreground="#888888" FontSize="13"/>
+                            <TextBlock x:Name="ChatCountText" Text="0" Foreground="#888888" FontSize="13"/>
+                        </StackPanel>
+                        <Border x:Name="ConnectionStatus" Background="#CC880000" Padding="10,6" Visibility="Collapsed" HorizontalAlignment="Stretch">
+                            <TextBlock x:Name="ConnectionStatusText" Text="Подключение..." Foreground="White" FontSize="13" TextAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
                 </ListView.Header>
                 <ListView.ItemTemplate>
                     <DataTemplate>
