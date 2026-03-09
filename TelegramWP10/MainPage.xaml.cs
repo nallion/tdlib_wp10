@@ -17,7 +17,6 @@ namespace TelegramWP10
         private ObservableCollection<ChatItem> _chatListItems = new ObservableCollection<ChatItem>();
         private ObservableCollection<MessageItem> _messageItems = new ObservableCollection<MessageItem>();
         private Dictionary<long, ChatItem> _chatsDict = new Dictionary<long, ChatItem>();
-        private Dictionary<int, long> _fileToChatId = new Dictionary<int, long>();
         private long _currentChatId = 0;
 
         public MainPage()
@@ -36,13 +35,12 @@ namespace TelegramWP10
             JObject p = new JObject();
             p["@type"] = "setTdlibParameters";
             p["use_test_dc"] = false;
-            p["database_directory"] = path + "/td_db_final";
-            p["files_directory"] = path + "/td_files_final";
-            p["api_id"] = 26688287; // ВСТАВЬ СВОЙ ID
-            p["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b"; // ВСТАВЬ СВОЙ HASH
+            p["database_directory"] = path + "/td_db_final_v1"; // Новая папка для чистого теста
+            p["files_directory"] = path + "/td_files_final_v1";
+            p["api_id"] = 26688287; // ТВОЙ ID
+            p["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b"; // ТВОЙ HASH
             p["system_language_code"] = "ru";
-            p["device_model"] = "Lumia WP10";
-            p["system_version"] = "10";
+            p["device_model"] = "Lumia";
             p["application_version"] = "1.0";
             TdJson.td_json_client_send(_client, p.ToString());
         }
@@ -58,7 +56,9 @@ namespace TelegramWP10
                     var ignored = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                         try {
                             var update = JObject.Parse(json);
-                            HandleUpdate(update["@type"]?.ToString(), update);
+                            string type = update["@type"]?.ToString();
+                            DebugText.Text = "Последний апдейт: " + type; // ДЕБАГ
+                            HandleUpdate(type, update);
                         } catch { }
                     });
                 }
@@ -67,9 +67,8 @@ namespace TelegramWP10
 
         private void HandleUpdate(string type, JObject update)
         {
-            // ДИАГНОСТИКА: Если пришла ошибка, выводим её в статус
             if (type == "error") {
-                StatusText.Text = "Ошибка ТГ: " + update["message"]?.ToString();
+                StatusText.Text = "ОШИБКА: " + update["message"];
                 return;
             }
 
@@ -78,22 +77,21 @@ namespace TelegramWP10
                 case "updateAuthorizationState":
                     var state = update["authorization_state"]?["@type"]?.ToString();
                     if (state == "authorizationStateWaitPhoneNumber") LoginPanel.Visibility = Visibility.Visible;
-                    if (state == "authorizationStateWaitCode") {
-                        CodeInput.Visibility = Visibility.Visible;
-                        CodeButton.Visibility = Visibility.Visible;
-                    }
+                    if (state == "authorizationStateWaitCode") { CodeInput.Visibility = Visibility.Visible; CodeButton.Visibility = Visibility.Visible; }
                     if (state == "authorizationStateReady") {
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
-                        TdJson.td_json_client_send(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":20}");
+                        StatusText.Text = "Статус: Готов";
+                        TdJson.td_json_client_send(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
                     }
                     break;
 
                 case "updateNewChat":
-                    long id = (long)update["chat"]["id"];
+                    var c = update["chat"];
+                    long id = (long)c["id"];
                     if (!_chatsDict.ContainsKey(id)) {
-                        _chatsDict[id] = new ChatItem { Id = id, Title = update["chat"]["title"]?.ToString() };
-                        // Загрузка фото... (код из прошлых версий остается таким же)
+                        _chatsDict[id] = new ChatItem { Id = id, Title = c["title"]?.ToString() };
+                        // Тут можно добавить код загрузки фото из прошлых ответов
                     }
                     break;
 
@@ -107,27 +105,27 @@ namespace TelegramWP10
                     }
                     break;
 
-                // ОБРАБОТКА ИСТОРИИ
-                case "messages":
+                case "messages": // Ответ на getChatHistory
                     var msgs = update["messages"];
                     if (msgs != null) {
-                        _messageItems.Clear(); // Очищаем, чтобы не дублировать
+                        _messageItems.Clear(); // Чистим перед загрузкой
                         foreach (var m in msgs) {
                             var parsed = ParseMessage(m);
-                            if (parsed != null) _messageItems.Insert(0, parsed);
+                            if (parsed != null) _messageItems.Insert(0, parsed); // В начало, т.к. ТГ шлет от новых к старым
                         }
                         if (_messageItems.Count > 0)
                             MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
                     }
                     break;
 
-                // НОВОЕ СООБЩЕНИЕ (включая твои отправленные)
                 case "updateNewMessage":
                     var nm = update["message"];
                     if (nm != null && (long)nm["chat_id"] == _currentChatId) {
                         var item = ParseMessage(nm);
-                        _messageItems.Add(item);
-                        MessagesListView.ScrollIntoView(item);
+                        if (item != null) {
+                            _messageItems.Add(item);
+                            MessagesListView.ScrollIntoView(item);
+                        }
                     }
                     break;
             }
@@ -136,18 +134,16 @@ namespace TelegramWP10
         private MessageItem ParseMessage(JToken msg)
         {
             try {
+                string txt = "";
                 var content = msg["content"];
-                string txt = "[Тип сообщения не поддерживается]";
-                
-                if (content["@type"]?.ToString() == "messageText") {
-                    txt = content["text"]?["text"]?.ToString();
-                }
+                if (content["@type"].ToString() == "messageText") txt = content["text"]["text"].ToString();
+                else txt = "[Вложение]";
 
                 return new MessageItem {
                     Id = (long)msg["id"],
                     Text = txt,
                     Alignment = (bool)msg["is_outgoing"] ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                    Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
+                    Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#444444"
                 };
             } catch { return null; }
         }
@@ -157,29 +153,29 @@ namespace TelegramWP10
             var chat = (ChatItem)e.ClickedItem;
             _currentChatId = chat.Id;
             CurrentChatTitle.Text = chat.Title;
+            
             StartPanel.Visibility = Visibility.Collapsed;
             MessagesPanel.Visibility = Visibility.Visible;
-            
+
             _messageItems.Clear();
-            StatusText.Text = "Загрузка истории...";
             
-            // Запрашиваем 50 сообщений сразу
-            JObject historyReq = new JObject {
-                ["@type"] = "getChatHistory",
-                ["chat_id"] = _currentChatId,
-                ["from_message_id"] = 0,
-                ["offset"] = 0,
-                ["limit"] = 50,
-                ["only_local"] = false
-            };
-            TdJson.td_json_client_send(_client, historyReq.ToString());
+            // ЗАПРОС ИСТОРИИ (Явный и чистый)
+            JObject h = new JObject();
+            h["@type"] = "getChatHistory";
+            h["chat_id"] = _currentChatId;
+            h["from_message_id"] = 0;
+            h["offset"] = 0;
+            h["limit"] = 30;
+            h["only_local"] = false;
+            TdJson.td_json_client_send(_client, h.ToString());
         }
 
         private void SendMessage_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(MessageInput.Text) || _currentChatId == 0) return;
+            string text = MessageInput.Text;
+            if (string.IsNullOrWhiteSpace(text) || _currentChatId == 0) return;
 
-            // ФИНАЛЬНАЯ СТРУКТУРА ОТПРАВКИ
+            // ФОРМИРУЕМ ОТПРАВКУ СТРОГО
             JObject req = new JObject {
                 ["@type"] = "sendMessage",
                 ["chat_id"] = _currentChatId,
@@ -187,15 +183,14 @@ namespace TelegramWP10
                     ["@type"] = "inputMessageText",
                     ["text"] = new JObject {
                         ["@type"] = "formattedText",
-                        ["text"] = MessageInput.Text
+                        ["text"] = text
                     }
                 }
             };
 
             TdJson.td_json_client_send(_client, req.ToString());
-            MessageInput.Text = ""; 
-            // Мы не добавляем сообщение в список вручную! 
-            // Оно само придет через `updateNewMessage`, когда сервер его примет.
+            MessageInput.Text = "";
+            // Сообщение появится в списке через updateNewMessage автоматически
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) {
