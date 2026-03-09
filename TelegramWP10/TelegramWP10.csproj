@@ -79,12 +79,12 @@
       <CertFile>$(ProjectDir)MyTempCert.pfx</CertFile>
       <CertPass>12345</CertPass>
       
-      <WinSDKPath>C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\</WinSDKPath>
-      <WinSDKPath Condition="!Exists('$(WinSDKPath)')">C:\Program Files (x86)\Windows Kits\10\bin\x86\</WinSDKPath>
+      <WSDKBin Condition="'$(WindowsSdkDir)' != ''">$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x86\</WSDKBin>
+      <WSDKBin Condition="'$(WSDKBin)' == ''">C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\</WSDKBin>
       
-      <SignToolCmd>"$(WinSDKPath)signtool.exe"</SignToolCmd>
-      <MakeCertCmd>"$(WinSDKPath)makecert.exe"</MakeCertCmd>
-      <Pvk2PfxCmd>"$(WinSDKPath)pvk2pfx.exe"</Pvk2PfxCmd>
+      <SignToolCmd>"$(WSDKBin)signtool.exe"</SignToolCmd>
+      <MakeCertCmd>"$(WSDKBin)makecert.exe"</MakeCertCmd>
+      <Pvk2PfxCmd>"$(WSDKBin)pvk2pfx.exe"</Pvk2PfxCmd>
       
       <SearchDir>C:\projects\tdlib-wp10\AppPackages</SearchDir>
     </PropertyGroup>
@@ -93,16 +93,16 @@
       <AppxToSign Include="$(SearchDir)\**\*.appx" />
     </ItemGroup>
 
-    <Message Importance="High" Text="--- КРИТИЧЕСКАЯ ПОДПИСЬ ПАКЕТОВ ---" />
-    <Message Importance="High" Text="Поиск файлов в: $(SearchDir)" />
+    <Message Importance="High" Text="--- ПРОВЕРКА ИНСТРУМЕНТОВ В: $(WSDKBin) ---" />
 
-    <Exec Condition="!Exists('$(CertFile)')" 
+    <Exec Condition="!Exists('$(CertFile)') And Exists('$(WSDKBin)makecert.exe')" 
           Command="$(MakeCertCmd) -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)TempCert.cer&quot; &amp;&amp; $(Pvk2PfxCmd) -pvk &quot;$(ProjectDir)TempCert.pvk&quot; -spc &quot;$(ProjectDir)TempCert.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" />
 
-    <Message Importance="High" Text="Подписываю файл: %(AppxToSign.FullPath)" Condition="'@(AppxToSign)' != ''" />
-    <Exec Command="$(SignToolCmd) sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(AppxToSign.FullPath)&quot;" 
-          Condition="'@(AppxToSign)' != ''" />
+    <Message Importance="High" Text="Найдены пакеты для подписи: @(AppxToSign)" Condition="'@(AppxToSign)' != ''" />
     
-    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА. ПОДПИСАНО: @(AppxToSign->Count()) ФАЙЛОВ ---" />
+    <Exec Condition="'@(AppxToSign)' != '' And Exists('$(WSDKBin)signtool.exe')"
+          Command="$(SignToolCmd) sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(AppxToSign.FullPath)&quot;" />
+    
+    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА ---" />
   </Target>
 </Project>
