@@ -139,7 +139,7 @@ namespace TelegramWP10
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
                         LogoutButton.Visibility = Visibility.Visible;
-                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":1000}");
                     }
                     if (s == "authorizationStateLoggingOut" || s == "authorizationStateClosed") {
                         _isAuthorized = false;
@@ -181,11 +181,15 @@ namespace TelegramWP10
                         ChatListView.Visibility = Visibility.Visible;
                         LogoutButton.Visibility = Visibility.Visible;
                         Log("After switch: LoginPanel=" + LoginPanel.Visibility + " ChatListView=" + ChatListView.Visibility);
-                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":1000}");
                         Log("getChats sent");
                     }
                     if (!_chatsDict.ContainsKey(chatId))
                         _chatsDict[chatId] = new ChatItem { Id = chatId, Title = c["title"]?.ToString() };
+                    var chatItem = _chatsDict[chatId];
+                    // Заполняем последнее сообщение
+                    var lastMsg = c["last_message"];
+                    if (lastMsg != null) FillChatLastMessage(chatItem, lastMsg, c);
                     var phSmall = c["photo"]?["small"];
                     if (phSmall != null) {
                         long phFileId = (long)phSmall["id"];
@@ -263,6 +267,19 @@ namespace TelegramWP10
                     }
                     break;
 
+                case "updateChatLastMessage":
+                    long ulcId = update["chat_id"]?.ToObject<long>() ?? 0;
+                    var ulcMsg = update["last_message"];
+                    if (ulcId != 0 && ulcMsg != null && _chatsDict.ContainsKey(ulcId))
+                        FillChatLastMessage(_chatsDict[ulcId], ulcMsg, update);
+                    break;
+
+                case "updateChatReadOutbox":
+                    long ucrId = update["chat_id"]?.ToObject<long>() ?? 0;
+                    if (ucrId != 0 && _chatsDict.ContainsKey(ucrId))
+                        _chatsDict[ucrId].IsRead = true;
+                    break;
+
                 case "chats":
                     Log("chats received count=" + (update["chat_ids"] as JArray)?.Count
                         + " ChatListView=" + ChatListView.Visibility
@@ -303,6 +320,30 @@ namespace TelegramWP10
                     });
                     break;
             }
+        }
+
+        private void FillChatLastMessage(ChatItem item, JToken msg, JToken chatOrUpdate) {
+            try {
+                var content = msg["content"];
+                string mtype = content?["@type"]?.ToString() ?? "";
+                string text = mtype == "messageText"
+                    ? content["text"]?["text"]?.ToString() ?? ""
+                    : mtype == "messagePhoto" ? "📷 Фото"
+                    : mtype == "messageVideo" ? "🎥 Видео"
+                    : mtype == "messageVoiceNote" ? "🎤 Голосовое"
+                    : mtype == "messageSticker" ? "😊 Стикер"
+                    : mtype == "messageDocument" ? "📄 Документ"
+                    : "[" + mtype.Replace("message", "") + "]";
+                item.LastMessage = text;
+                long date = msg["date"]?.ToObject<long>() ?? 0;
+                if (date > 0)
+                    item.LastMessageTime = DateTimeOffset.FromUnixTimeSeconds(date).LocalDateTime.ToString("HH:mm");
+                item.IsOutgoing = msg["is_outgoing"]?.ToObject<bool>() ?? false;
+                // Статус: прочитано если last_read_outbox_message_id >= id сообщения
+                long msgId = msg["id"]?.ToObject<long>() ?? 0;
+                long readOutbox = chatOrUpdate["last_read_outbox_message_id"]?.ToObject<long>() ?? 0;
+                item.IsRead = item.IsOutgoing && readOutbox >= msgId;
+            } catch { }
         }
 
         private MessageItem ParseMessage(JToken msg) {
@@ -420,18 +461,9 @@ namespace TelegramWP10
             if (_connectionReady) {
                 TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
             } else {
-                // Соединение ещё не готово — запомним и отправим когда подключится
                 _pendingChatHistoryId = _currentChatId;
                 Log("OPEN CHAT deferred — waiting for connection");
             }
-            // Второй запрос с задержкой — на случай холодного старта когда TDLib ещё грузит базу
-            var chatIdCopy = _currentChatId;
-            var ignored = Task.Delay(1500).ContinueWith(_ => {
-                var ignored2 = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                    if (_currentChatId == chatIdCopy) // пользователь всё ещё в этом чате
-                        TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + chatIdCopy + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
-                });
-            });
         }
 
         private void SendMessage_Click(object sender, RoutedEventArgs e) {

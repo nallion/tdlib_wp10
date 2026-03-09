@@ -39,15 +39,32 @@
                 </ListView.Header>
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Grid Margin="0,10">
+                        <Grid Margin="0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="60"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border Width="50" Height="50" CornerRadius="25" Background="#555555" BorderThickness="0">
+                            <Border Width="50" Height="50" CornerRadius="25" Background="#555555" BorderThickness="0" VerticalAlignment="Top">
                                 <Image Source="{Binding Photo}" Stretch="UniformToFill" Width="50" Height="50"/>
                             </Border>
-                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="5,0" FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                            <Grid Grid.Column="1" Margin="5,0,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <!-- Строка 1: название + время -->
+                                <Grid Grid.Row="0">
+                                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LastMessageTime}" Foreground="#888888" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                </Grid>
+                                <!-- Строка 2: последнее сообщение + галочки -->
+                                <Grid Grid.Row="1" Margin="0,2,0,0">
+                                    <TextBlock Text="{Binding LastMessage}" Foreground="#888888" FontSize="13" TextTrimming="CharacterEllipsis" Margin="0,0,30,0"/>
+                                    <TextBlock Text="{Binding StatusText}" Foreground="#0088cc" FontSize="13"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center"
+                                               Visibility="{Binding StatusVisibility}"/>
+                                </Grid>
+                            </Grid>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
