@@ -16,10 +16,8 @@ namespace TelegramWP10
         private IntPtr _client;
         private ObservableCollection<ChatItem> _chatListItems = new ObservableCollection<ChatItem>();
         private ObservableCollection<MessageItem> _messageItems = new ObservableCollection<MessageItem>();
-        
         private Dictionary<long, ChatItem> _chatsDict = new Dictionary<long, ChatItem>();
         private Dictionary<int, long> _fileToChatId = new Dictionary<int, long>();
-        
         private long _currentChatId = 0;
 
         public MainPage()
@@ -27,7 +25,7 @@ namespace TelegramWP10
             this.InitializeComponent();
             _client = TdJson.td_json_client_create();
             ChatListView.ItemsSource = _chatListItems;
-            MessagesListView.ItemsSource = _messageItems; // Привязка сообщений
+            MessagesListView.ItemsSource = _messageItems;
             Task.Run(() => LongPolling());
             SendParameters();
         }
@@ -35,9 +33,18 @@ namespace TelegramWP10
         private void SendParameters()
         {
             string path = Windows.Storage.ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
-            // ВСТАВЬ СВОИ ДАННЫЕ
-            string json = "{\"@type\":\"setTdlibParameters\",\"use_test_dc\":false,\"database_directory\":\"" + path + "/td_db_v4\",\"files_directory\":\"" + path + "/td_files_v4\",\"api_id\":26688287,\"api_hash\":\"5f4afe72bc71dc6ec40f7dcb0c9a822b\",\"system_language_code\":\"ru\",\"device_model\":\"Lumia\",\"system_version\":\"WP10\",\"application_version\":\"1.0\"}";
-            TdJson.td_json_client_send(_client, json);
+            JObject p = new JObject();
+            p["@type"] = "setTdlibParameters";
+            p["use_test_dc"] = false;
+            p["database_directory"] = path + "/td_db_v5";
+            p["files_directory"] = path + "/td_files_v5";
+            p["api_id"] = 26688287; // ВСТАВЬ СВОЙ ID
+            p["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b"; // ВСТАВЬ СВОЙ HASH
+            p["system_language_code"] = "ru";
+            p["device_model"] = "Lumia";
+            p["system_version"] = "10";
+            p["application_version"] = "1.0";
+            TdJson.td_json_client_send(_client, p.ToString());
         }
 
         private void LongPolling()
@@ -84,131 +91,106 @@ namespace TelegramWP10
                     long id = (long)chat["id"];
                     if (!_chatsDict.ContainsKey(id)) {
                         _chatsDict[id] = new ChatItem { Id = id, Title = chat["title"]?.ToString() ?? "Чат" };
-                        var smallPhoto = chat["photo"]?["small"];
-                        if (smallPhoto != null) {
-                            int fId = (int)smallPhoto["id"];
+                        var photo = chat["photo"]?["small"];
+                        if (photo != null) {
+                            int fId = (int)photo["id"];
                             _fileToChatId[fId] = id;
-                            string localPath = smallPhoto["local"]?["path"]?.ToString();
-                            if (!string.IsNullOrEmpty(localPath)) {
-                                _chatsDict[id].Photo = new BitmapImage(new Uri(localPath));
-                            } else {
-                                TdJson.td_json_client_send(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":1}");
-                            }
+                            string lp = photo["local"]?["path"]?.ToString();
+                            if (!string.IsNullOrEmpty(lp)) _chatsDict[id].Photo = new BitmapImage(new Uri(lp));
+                            else TdJson.td_json_client_send(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":1}");
                         }
                     }
                     break;
 
                 case "chats":
-                    var chatIds = update["chat_ids"];
-                    if (chatIds != null) {
-                        foreach (var cIdToken in chatIds) {
-                            long cId = (long)cIdToken;
-                            if (_chatsDict.ContainsKey(cId) && !_chatListItems.Contains(_chatsDict[cId])) {
-                                _chatListItems.Add(_chatsDict[cId]);
-                            }
+                    var ids = update["chat_ids"];
+                    if (ids != null) {
+                        foreach (var cId in ids) {
+                            long idL = (long)cId;
+                            if (_chatsDict.ContainsKey(idL) && !_chatListItems.Contains(_chatsDict[idL]))
+                                _chatListItems.Add(_chatsDict[idL]);
                         }
+                    }
+                    break;
+
+                case "messages":
+                    var msgs = update["messages"];
+                    if (msgs != null) {
+                        foreach (var m in msgs) _messageItems.Insert(0, ParseMessage(m));
+                        if (_messageItems.Count > 0) MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
+                    }
+                    break;
+
+                case "updateNewMessage":
+                    var nm = update["message"];
+                    if (nm != null && (long)nm["chat_id"] == _currentChatId) {
+                        var item = ParseMessage(nm);
+                        _messageItems.Add(item);
+                        MessagesListView.ScrollIntoView(item);
                     }
                     break;
 
                 case "updateFile":
-                    var file = update["file"];
-                    if (file == null) return;
-                    int fileId = (int)file["id"];
-                    string path = file["local"]?["path"]?.ToString();
-                    if (!string.IsNullOrEmpty(path) && file["local"]?["is_completed"]?.Value<bool>() == true) {
-                        if (_fileToChatId.ContainsKey(fileId) && _chatsDict.ContainsKey(_fileToChatId[fileId])) {
-                            _chatsDict[_fileToChatId[fileId]].Photo = new BitmapImage(new Uri(path));
-                        }
-                    }
-                    break;
-
-                // Загрузка истории чата (вызывается при клике)
-                case "messages":
-                    var msgs = update["messages"];
-                    if (msgs != null) {
-                        // Сообщения приходят от новых к старым, поэтому добавляем их в начало списка (индекс 0)
-                        foreach (var msg in msgs) {
-                            var item = ParseMessage(msg);
-                            if (item != null) _messageItems.Insert(0, item);
-                        }
-                        // Прокручиваем вниз
-                        if (_messageItems.Count > 0)
-                            MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
-                    }
-                    break;
-
-                // Пришло новое сообщение в реальном времени
-                case "updateNewMessage":
-                    var newMsg = update["message"];
-                    if (newMsg != null && (long)newMsg["chat_id"] == _currentChatId) {
-                        var item = ParseMessage(newMsg);
-                        if (item != null) {
-                            _messageItems.Add(item);
-                            MessagesListView.ScrollIntoView(item); // Автоскролл
-                        }
+                    var f = update["file"];
+                    if (f != null && f["local"]?["is_completed"]?.Value<bool>() == true) {
+                        int fid = (int)f["id"];
+                        if (_fileToChatId.ContainsKey(fid))
+                            _chatsDict[_fileToChatId[fid]].Photo = new BitmapImage(new Uri(f["local"]["path"].ToString()));
                     }
                     break;
             }
         }
 
-        // Вспомогательная функция для разбора JSON-сообщения
         private MessageItem ParseMessage(JToken msg)
         {
-            var content = msg["content"];
-            string text = "[Вложение]"; // Если прислали фото/стикер, пишем заглушку
-            
-            if (content?["@type"]?.ToString() == "messageText") {
-                text = content["text"]?["text"]?.ToString() ?? "";
-            }
-
-            bool isOutgoing = msg["is_outgoing"]?.Value<bool>() ?? false;
-
+            string txt = msg["content"]?["text"]?["text"]?.ToString() ?? "[Вложение]";
+            bool outg = msg["is_outgoing"]?.Value<bool>() ?? false;
             return new MessageItem {
                 Id = (long)msg["id"],
-                Text = text,
-                Alignment = isOutgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                Background = isOutgoing ? "#0088cc" : "#444444" // Синий - наши, Серый - чужие
+                Text = txt,
+                Alignment = outg ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                Background = outg ? "#0088cc" : "#444444"
             };
         }
 
-        // КЛИК ПО ЧАТУ ИЗ СПИСКА
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e)
         {
-            var clickedChat = (ChatItem)e.ClickedItem;
-            _currentChatId = clickedChat.Id;
-            CurrentChatTitle.Text = clickedChat.Title;
-
-            // Переключаем интерфейс
+            var chat = (ChatItem)e.ClickedItem;
+            _currentChatId = chat.Id;
+            CurrentChatTitle.Text = chat.Title;
             StartPanel.Visibility = Visibility.Collapsed;
             MessagesPanel.Visibility = Visibility.Visible;
-
-            // Очищаем старые сообщения и запрашиваем новые
             _messageItems.Clear();
-            TdJson.td_json_client_send(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":20,\"only_local\":false}");
+            TdJson.td_json_client_send(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":20}");
         }
 
-        // КНОПКА НАЗАД
         private void BackButton_Click(object sender, RoutedEventArgs e)
         {
             _currentChatId = 0;
             MessagesPanel.Visibility = Visibility.Collapsed;
             StartPanel.Visibility = Visibility.Visible;
-            _messageItems.Clear();
         }
 
-        // ОТПРАВКА СООБЩЕНИЯ
         private void SendMessage_Click(object sender, RoutedEventArgs e)
         {
             string text = MessageInput.Text;
             if (string.IsNullOrWhiteSpace(text) || _currentChatId == 0) return;
 
-            // Экранируем кавычки и переносы строк для JSON
-            text = text.Replace("\"", "\\\"").Replace("\r\n", "\\n").Replace("\n", "\\n");
+            // ИСПРАВЛЕННАЯ ОТПРАВКА ЧЕРЕЗ JOBJECT
+            JObject req = new JObject {
+                ["@type"] = "sendMessage",
+                ["chat_id"] = _currentChatId,
+                ["input_message_content"] = new JObject {
+                    ["@type"] = "inputMessageText",
+                    ["text"] = new JObject {
+                        ["@type"] = "formattedText",
+                        ["text"] = text
+                    }
+                }
+            };
 
-            string request = "{\"@type\":\"sendMessage\",\"chat_id\":" + _currentChatId + ",\"input_message_content\":{\"@type\":\"inputMessageText\",\"text\":{\"@type\":\"formattedText\",\"text\":\"" + text + "\"}}}";
-            
-            TdJson.td_json_client_send(_client, request);
-            MessageInput.Text = ""; // Очищаем поле ввода
+            TdJson.td_json_client_send(_client, req.ToString());
+            MessageInput.Text = "";
         }
 
         private void SendPhone_Click(object sender, RoutedEventArgs e) =>

@@ -46,26 +46,26 @@
             </Grid.RowDefinitions>
             
             <StackPanel Orientation="Horizontal" Background="#0088cc" Padding="10">
-                <Button Content="← Назад" Click="BackButton_Click" Foreground="White" Background="Transparent" BorderThickness="0" FontSize="18"/>
-                <TextBlock x:Name="CurrentChatTitle" Text="Имя чата" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="10,0"/>
+                <Button Content="←" Click="BackButton_Click" Foreground="White" Background="Transparent" FontSize="24" Width="50"/>
+                <TextBlock x:Name="CurrentChatTitle" Text="Чат" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="10,0"/>
             </StackPanel>
             
             <ListView x:Name="MessagesListView" Grid.Row="1" SelectionMode="None" Padding="10">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:MessageItem">
-                        <Border Background="{Binding Background}" Padding="12,8" Margin="0,5" CornerRadius="8" HorizontalAlignment="{Binding Alignment}">
-                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxWidth="300" Foreground="White" FontSize="16"/>
+                        <Border Background="{Binding Background}" Padding="12,8" Margin="0,5" CornerRadius="12" HorizontalAlignment="{Binding Alignment}">
+                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxWidth="280" Foreground="White" FontSize="16"/>
                         </Border>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
             
-            <Grid Grid.Row="2" Padding="10" Background="#1e1e1e">
+            <Grid Grid.Row="2" Padding="10" Background="#222222">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="MessageInput" PlaceholderText="Написать сообщение..." AcceptsReturn="True" MaxHeight="100"/>
+                <TextBox x:Name="MessageInput" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="100"/>
                 <Button Grid.Column="1" Content="➤" Click="SendMessage_Click" Margin="10,0,0,0" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
             </Grid>
         </Grid>
