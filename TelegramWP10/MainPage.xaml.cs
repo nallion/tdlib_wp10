@@ -32,12 +32,12 @@ namespace TelegramWP10
         }
 
         private void SendParameters() {
-            // RoamingFolder сохраняется между переустановками в отличие от LocalFolder
-            string path = ApplicationData.Current.RoamingFolder.Path.Replace("\\", "/");
+            // DocumentsLibrary хранится вне папки приложения и переживает переустановку
+            string path = Windows.Storage.KnownFolders.DocumentsLibrary.Path.Replace("\\", "/");
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v40",
+                ["database_directory"] = path + "/TelegramWP10/td_db",
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
