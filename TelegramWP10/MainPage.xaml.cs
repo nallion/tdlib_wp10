@@ -31,16 +31,18 @@ namespace TelegramWP10
         }
 
         private async void InitAsync() {
-            // Предварительно создаём папку, путь сохраняем для использования в SendParameters
+            // Пробуем SD карту — она переживает переустановку
             try {
-                var folder = await Windows.Storage.KnownFolders.DocumentsLibrary
-                    .CreateFolderAsync("TelegramWP10", Windows.Storage.CreationCollisionOption.OpenIfExists);
-                _dbPath = folder.Path.Replace("\\", "/") + "/td_db";
-            } catch (Exception ex) {
-                var dialog = new Windows.UI.Popups.MessageDialog(
-                    "Нет доступа к папке Документы.\nСессия не будет сохраняться между переустановками.\n\nОшибка: " + ex.Message,
-                    "Внимание");
-                await dialog.ShowAsync();
+                var devices = Windows.Storage.KnownFolders.RemovableDevices;
+                var folders = await devices.GetFoldersAsync();
+                if (folders.Count > 0) {
+                    var sdCard = folders[0];
+                    var appFolder = await sdCard.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
+                    _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
+                } else {
+                    _dbPath = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/") + "/td_db";
+                }
+            } catch {
                 _dbPath = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/") + "/td_db";
             }
             Task.Run(() => LongPolling());
