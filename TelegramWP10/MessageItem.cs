@@ -6,6 +6,7 @@ namespace TelegramWP10
     {
         public long Id { get; set; }
         public string Text { get; set; }
+        public string Date { get; set; } // Новое поле для времени
         public HorizontalAlignment Alignment { get; set; } 
         public string Background { get; set; } 
     }

@@ -27,10 +27,10 @@
                             </Grid.ColumnDefinitions>
                             <Ellipse Width="50" Height="50">
                                 <Ellipse.Fill>
-                                    <ImageBrush ImageSource="{Binding Photo}"/>
+                                    <ImageBrush ImageSource="{Binding Photo, Mode=OneWay}"/>
                                 </Ellipse.Fill>
                             </Ellipse>
-                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="5,0" FontSize="18" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Margin="5,0" FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
@@ -52,8 +52,11 @@
             <ListView x:Name="MessagesListView" Grid.Row="1" SelectionMode="None" Padding="10">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:MessageItem">
-                        <Border Background="{Binding Background}" Padding="10" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}">
-                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxWidth="260" Foreground="White"/>
+                        <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxWidth="240" Foreground="White" FontSize="16"/>
+                                <TextBlock Text="{Binding Date}" FontSize="10" Foreground="#AAAAAA" HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                            </StackPanel>
                         </Border>
                     </DataTemplate>
                 </ListView.ItemTemplate>
