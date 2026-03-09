@@ -25,6 +25,20 @@ namespace TelegramWP10
         public bool IsVideo { get => _isVideo; set { _isVideo = value; OnPropertyChanged("IsVideo"); OnPropertyChanged("VideoIconVisibility"); } }
         public Visibility VideoIconVisibility => IsVideo ? Visibility.Visible : Visibility.Collapsed;
 
+        // Документ
+        private bool _isDocument;
+        public bool IsDocument { get => _isDocument; set { _isDocument = value; OnPropertyChanged("IsDocument"); OnPropertyChanged("DocumentVisibility"); } }
+        public Visibility DocumentVisibility => IsDocument ? Visibility.Visible : Visibility.Collapsed;
+
+        public string DocumentName { get; set; }
+        public string DocumentSize { get; set; }
+
+        private string _downloadStatus = "⬇ Скачать";
+        public string DownloadStatus { get => _downloadStatus; set { _downloadStatus = value; OnPropertyChanged("DownloadStatus"); } }
+
+        private bool _isDownloaded = false;
+        public bool IsDownloaded { get => _isDownloaded; set { _isDownloaded = value; OnPropertyChanged("IsDownloaded"); OnPropertyChanged("DownloadStatus"); } }
+
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }

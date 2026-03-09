@@ -125,6 +125,26 @@
                                     <TextBlock Text="▶" Foreground="White" FontSize="40" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding VideoIconVisibility}" Opacity="0.8" IsHitTestVisible="False"/>
                                 </Grid>
 
+                                <!-- Документ -->
+                                <Border Visibility="{Binding DocumentVisibility}" Background="#22FFFFFF" CornerRadius="6" Padding="8,6" Margin="0,0,0,5">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="📄" FontSize="28" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DocumentName}" Foreground="White" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding DocumentSize}" Foreground="#AAAAAA" FontSize="11"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Button Content="{Binding DownloadStatus}" Tag="{Binding Id}" Click="DocumentButton_Click"
+                                                Margin="0,6,0,0" HorizontalAlignment="Stretch"
+                                                Background="#0088cc" Foreground="White" FontSize="12" Padding="6,4"/>
+                                    </StackPanel>
+                                </Border>
+
                                 <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="White" FontSize="16"/>
                                 <TextBlock Text="{Binding Date}" FontSize="10" Foreground="#AAAAAA" HorizontalAlignment="Right" Margin="0,2,0,0"/>
                             </StackPanel>

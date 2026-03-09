@@ -211,14 +211,32 @@ namespace TelegramWP10
                     if (fileObj != null) {
                         long fid = fileObj["id"] != null ? (long)fileObj["id"] : 0;
                         string fpath = fileObj["local"]?["path"]?.ToString();
+                        bool isCompleted = fileObj["local"]?["is_downloading_completed"]?.ToObject<bool>() ?? false;
+                        long downloaded = fileObj["local"]?["downloaded_size"]?.ToObject<long>() ?? 0;
+                        long total = fileObj["size"]?.ToObject<long>() ?? 0;
                         Log("FILE id=" + fid + " path=" + fpath);
-                        if (fid != 0 && !string.IsNullOrEmpty(fpath)) {
-                            if (_fileToChatId.ContainsKey(fid)) { var t = UpdateAvatar(_fileToChatId[fid], fpath); }
+                        if (fid != 0) {
+                            if (_fileToChatId.ContainsKey(fid) && !string.IsNullOrEmpty(fpath))
+                                { var t = UpdateAvatar(_fileToChatId[fid], fpath); }
                             if (_fileToMsgId.ContainsKey(fid)) {
                                 long mid = _fileToMsgId[fid];
-                                var t = UpdateMessagePhoto(mid, fpath);
-                                if (_messagesDict.ContainsKey(mid) && _messagesDict[mid].IsVideo)
-                                    _messagesDict[mid].FilePath = fpath;
+                                if (!string.IsNullOrEmpty(fpath))
+                                    { var t = UpdateMessagePhoto(mid, fpath); }
+                                if (_messagesDict.ContainsKey(mid)) {
+                                    var msgItem = _messagesDict[mid];
+                                    if (msgItem.IsVideo && !string.IsNullOrEmpty(fpath))
+                                        msgItem.FilePath = fpath;
+                                    if (msgItem.IsDocument) {
+                                        if (isCompleted && !string.IsNullOrEmpty(fpath)) {
+                                            msgItem.FilePath = fpath;
+                                            msgItem.IsDownloaded = true;
+                                            msgItem.DownloadStatus = "📂 Открыть";
+                                        } else if (total > 0) {
+                                            int pct = (int)(downloaded * 100 / total);
+                                            msgItem.DownloadStatus = "⏳ " + pct + "%";
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -416,6 +434,14 @@ namespace TelegramWP10
             return dt.ToString("d MMM в HH:mm");
         }
 
+        private string FormatFileSize(long bytes) {
+            if (bytes <= 0) return "";
+            if (bytes < 1024) return bytes + " Б";
+            if (bytes < 1024 * 1024) return (bytes / 1024) + " КБ";
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)) + " МБ";
+            return (bytes / (1024 * 1024 * 1024)) + " ГБ";
+        }
+
         private void FillChatLastMessage(ChatItem item, JToken msg, JToken chatOrUpdate) {
             try {
                 var content = msg["content"];
@@ -502,7 +528,28 @@ namespace TelegramWP10
                     }
                 }
 
-                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo")
+                } else if (type == "messageDocument") {
+                    var doc = content["document"];
+                    var docFile = doc?["document"] as JObject;
+                    string docName = doc?["file_name"]?.ToString() ?? "Файл";
+                    long docSize = docFile?["size"]?.ToObject<long>() ?? 0;
+                    item.IsDocument = true;
+                    item.DocumentName = docName;
+                    item.DocumentSize = FormatFileSize(docSize);
+                    if (docFile != null) {
+                        long dfid = (long)docFile["id"];
+                        _fileToMsgId[dfid] = msgId;
+                        _messagesDict[msgId] = item;
+                        string dPath = docFile["local"]?["path"]?.ToString();
+                        Log("DOC msg=" + msgId + " file_id=" + dfid + " name=" + docName + " path=" + dPath);
+                        if (!string.IsNullOrEmpty(dPath)) {
+                            item.FilePath = dPath;
+                            item.IsDownloaded = true;
+                            item.DownloadStatus = "📂 Открыть";
+                        }
+                    }
+                }
+                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo" && type != "messageDocument")
                     item.Text = "[" + type.Replace("message", "") + "]";
                 return item;
             } catch (Exception ex) { Log("ParseMessage ERR: " + ex.Message); return null; }
@@ -593,6 +640,29 @@ namespace TelegramWP10
                 await Windows.System.Launcher.LaunchFileAsync(file);
                 Log("VIDEO launched: " + item.FilePath);
             } catch (Exception ex) { Log("VIDEO ERR: " + ex.Message); }
+        }
+
+        private async void DocumentButton_Click(object sender, Windows.UI.Xaml.RoutedEventArgs e) {
+            var btn = sender as Windows.UI.Xaml.Controls.Button;
+            if (btn?.Tag == null) return;
+            long msgId = (long)btn.Tag;
+            if (!_messagesDict.ContainsKey(msgId)) return;
+            var item = _messagesDict[msgId];
+            if (item.IsDownloaded && !string.IsNullOrEmpty(item.FilePath)) {
+                try {
+                    var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(item.FilePath);
+                    await Windows.System.Launcher.LaunchFileAsync(file);
+                } catch (Exception ex) { Log("DOC open ERR: " + ex.Message); }
+            } else {
+                // Запускаем скачивание — ищем file_id по msgId
+                foreach (var kv in _fileToMsgId) {
+                    if (kv.Value == msgId) {
+                        item.DownloadStatus = "⏳ Загрузка...";
+                        TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + kv.Key + ",\"priority\":10,\"synchronous\":false}");
+                        break;
+                    }
+                }
+            }
         }
 
         private void LogoutButton_Click(object sender, RoutedEventArgs e) {
