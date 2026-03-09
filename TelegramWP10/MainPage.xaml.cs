@@ -65,8 +65,9 @@ namespace TelegramWP10
                         try {
                             var update = JObject.Parse(json);
                             string type = update["@type"]?.ToString();
-                            // Глубокая отладка: логируем все входящие события
-                            Log("← " + type + ": " + json.Substring(0, Math.Min(json.Length, 300)));
+                            // Глубокая отладка: логируем все входящие события кроме шумных
+                            if (type != "updateFile" && type != "updateOption" && type != "updateChatLastMessage" && type != "updateChatReadInbox" && type != "updateChatReadOutbox")
+                                Log("← " + type + ": " + json.Substring(0, Math.Min(json.Length, 300)));
                             if (type == "error") Log("TG ERR: " + json);
                             HandleUpdate(type, update);
                         } catch (Exception ex) { Log("JSON ERR: " + ex.Message); }
