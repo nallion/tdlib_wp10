@@ -31,31 +31,39 @@ namespace TelegramWP10
         }
 
         private async void InitAsync() {
-            await SendParameters();
-            Task.Run(() => LongPolling());
-        }
-
-        private async Task SendParameters() {
-            string path;
+            // Предварительно создаём папку, путь сохраняем для использования в SendParameters
             try {
                 var folder = await Windows.Storage.KnownFolders.DocumentsLibrary
                     .CreateFolderAsync("TelegramWP10", Windows.Storage.CreationCollisionOption.OpenIfExists);
-                path = folder.Path.Replace("\\", "/");
+                _dbPath = folder.Path.Replace("\\", "/") + "/td_db";
             } catch (Exception ex) {
                 var dialog = new Windows.UI.Popups.MessageDialog(
                     "Нет доступа к папке Документы.\nСессия не будет сохраняться между переустановками.\n\nОшибка: " + ex.Message,
                     "Внимание");
                 await dialog.ShowAsync();
-                path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
+                _dbPath = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/") + "/td_db";
             }
+            Task.Run(() => LongPolling());
+        }
+
+        private string _dbPath = "";
+
+        private void SendParameters() {
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db",
+                ["database_directory"] = _dbPath,
+                ["files_directory"] = _dbPath + "_files",
+                ["database_encryption_key"] = "",
+                ["use_file_database"] = true,
+                ["use_chat_info_database"] = true,
+                ["use_message_database"] = true,
+                ["use_secret_chats"] = false,
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
                 ["device_model"] = "Lumia",
+                ["system_version"] = "10",
                 ["application_version"] = "1.2"
             };
             TdJson.SendUtf8(_client, p.ToString());
@@ -83,9 +91,39 @@ namespace TelegramWP10
             switch (type) {
                 case "updateAuthorizationState":
                     var s = update["authorization_state"]?["@type"]?.ToString();
-                    if (s == "authorizationStateWaitPhoneNumber") LoginPanel.Visibility = Visibility.Visible;
-                    if (s == "authorizationStateWaitCode") { CodeInput.Visibility = Visibility.Visible; CodeButton.Visibility = Visibility.Visible; }
-                    if (s == "authorizationStateReady") { LoginPanel.Visibility = Visibility.Collapsed; ChatListView.Visibility = Visibility.Visible; TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}"); }
+                    if (s == "authorizationStateWaitTdlibParameters") {
+                        SendParameters();
+                    }
+                    if (s == "authorizationStateWaitPhoneNumber") {
+                        LoginStatus.Text = "Введите номер телефона";
+                        PhoneInput.IsEnabled = true;
+                        PhoneButton.IsEnabled = true;
+                    }
+                    if (s == "authorizationStateWaitCode") {
+                        LoginStatus.Text = "Код отправлен. Проверьте Telegram или SMS.";
+                        PhoneInput.IsEnabled = false;
+                        PhoneButton.IsEnabled = false;
+                        CodeInput.Visibility = Visibility.Visible;
+                        CodeButton.Visibility = Visibility.Visible;
+                        CodeInput.Focus(FocusState.Programmatic);
+                    }
+                    if (s == "authorizationStateWaitPassword") {
+                        LoginStatus.Text = "Введите пароль двухфакторной аутентификации";
+                    }
+                    if (s == "authorizationStateReady") {
+                        LoginPanel.Visibility = Visibility.Collapsed;
+                        ChatListView.Visibility = Visibility.Visible;
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
+                    }
+                    if (s == "authorizationStateLoggingOut" || s == "authorizationStateClosed") {
+                        LoginPanel.Visibility = Visibility.Visible;
+                        LoginStatus.Text = "Выход из аккаунта...";
+                    }
+                    break;
+                case "error":
+                    LoginStatus.Text = "Ошибка: " + update["message"]?.ToString();
+                    PhoneButton.IsEnabled = true;
+                    CodeButton.IsEnabled = true;
                     break;
                 case "updateNewChat":
                     var c = update["chat"]; long id = (long)c["id"];
@@ -232,7 +270,17 @@ namespace TelegramWP10
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) { _currentChatId = 0; MessagesPanel.Visibility = Visibility.Collapsed; StartPanel.Visibility = Visibility.Visible; }
-        private void SendPhone_Click(object sender, RoutedEventArgs e) => TdJson.SendUtf8(_client, "{\"@type\":\"setAuthenticationPhoneNumber\",\"phone_number\":\"" + PhoneInput.Text + "\"}");
-        private void SendCode_Click(object sender, RoutedEventArgs e) => TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
-    }
+        private void SendPhone_Click(object sender, RoutedEventArgs e) {
+            if (string.IsNullOrWhiteSpace(PhoneInput.Text)) return;
+            PhoneButton.IsEnabled = false;
+            LoginStatus.Text = "Отправка номера...";
+            TdJson.SendUtf8(_client, "{\"@type\":\"setAuthenticationPhoneNumber\",\"phone_number\":\"" + PhoneInput.Text.Trim() + "\"}");
+        }
+
+        private void SendCode_Click(object sender, RoutedEventArgs e) {
+            if (string.IsNullOrWhiteSpace(CodeInput.Text)) return;
+            CodeButton.IsEnabled = false;
+            LoginStatus.Text = "Проверка кода...";
+            TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text.Trim() + "\"}");
+        }    }
 }
