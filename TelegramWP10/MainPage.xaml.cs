@@ -232,7 +232,7 @@ namespace TelegramWP10
                         var newItem = ParseMessage(newMsg);
                         if (newItem != null) {
                             _messageItems.Add(newItem);
-                            MessagesListView.ScrollIntoView(newItem);
+                            var sv = FindScrollViewer(MessagesListView); sv?.ScrollToVerticalOffset(double.MaxValue);
                         }
                     }
                     break;
@@ -342,12 +342,23 @@ namespace TelegramWP10
                     _isLoadingHistory = false;
                     LoadingIndicator.Visibility = Visibility.Collapsed;
                     MessagesListView.Visibility = Visibility.Visible;
+                    // Скроллим вниз после того как ListView отрендерит элементы
                     var ignored2 = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => {
-                        if (_messageItems.Count > 0)
-                            MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
+                        var scrollViewer = FindScrollViewer(MessagesListView);
+                        scrollViewer?.ScrollToVerticalOffset(double.MaxValue);
                     });
                     break;
             }
+        }
+
+        private ScrollViewer FindScrollViewer(DependencyObject element) {
+            if (element is ScrollViewer sv) return sv;
+            int count = Windows.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(element);
+            for (int i = 0; i < count; i++) {
+                var result = FindScrollViewer(Windows.UI.Xaml.Media.VisualTreeHelper.GetChild(element, i));
+                if (result != null) return result;
+            }
+            return null;
         }
 
         private void FillChatLastMessage(ChatItem item, JToken msg, JToken chatOrUpdate) {
