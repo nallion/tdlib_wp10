@@ -31,13 +31,26 @@ namespace TelegramWP10
             SendParameters();
         }
 
-        private void SendParameters() {
-            // DocumentsLibrary хранится вне папки приложения и переживает переустановку
-            string path = Windows.Storage.KnownFolders.DocumentsLibrary.Path.Replace("\\", "/");
+        private async void SendParameters() {
+            // Создаём папку через WinRT API — TDLib не может сам создать папку в DocumentsLibrary
+            string path;
+            try {
+                var folder = await Windows.Storage.KnownFolders.DocumentsLibrary
+                    .CreateFolderAsync("TelegramWP10", Windows.Storage.CreationCollisionOption.OpenIfExists);
+                path = folder.Path.Replace("\\", "/");
+            } catch (Exception ex) {
+                // Сообщаем пользователю что нет доступа к Documents
+                var dialog = new Windows.UI.Popups.MessageDialog(
+                    "Нет доступа к папке Документы.\nСессия не будет сохраняться между переустановками.\n\nОшибка: " + ex.Message,
+                    "Внимание");
+                await dialog.ShowAsync();
+                // Fallback на LocalFolder
+                path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
+            }
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/TelegramWP10/td_db",
+                ["database_directory"] = path + "/td_db",
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
