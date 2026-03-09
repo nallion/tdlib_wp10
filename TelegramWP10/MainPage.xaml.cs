@@ -20,7 +20,7 @@ namespace TelegramWP10
         private Dictionary<long, long> _fileToMsgId = new Dictionary<long, long>();
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
         private long _currentChatId = 0;
-        private long _pendingHistoryChatId = 0; // для какого чата ждём getChatHistory
+        private long _pendingHistoryChatId = 0;
         private string _dbPath = "";
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
@@ -152,8 +152,6 @@ namespace TelegramWP10
                         _fileToChatId[phFileId] = chatId;
                         string phPath = phSmall["local"]?["path"]?.ToString();
                         Log("AVATAR chat=" + chatId + " file_id=" + phFileId + " path=" + phPath);
-                        // Главный фикс: проверяем path, а не is_completed
-                        // TDLib может вернуть is_completed=false даже если файл есть
                         if (!string.IsNullOrEmpty(phPath))
                             { var t = UpdateAvatar(chatId, phPath); }
                         else
@@ -163,24 +161,16 @@ namespace TelegramWP10
 
                 case "updateFile":
                 case "file":
-                    // "updateFile" — обёртка, файл внутри в поле "file"
-                    // "file" — прямой ответ на downloadFile, сам и есть файл
                     var fileObj = (type == "updateFile") ? update["file"] as JObject : update;
                     if (fileObj != null) {
                         long fid = fileObj["id"] != null ? (long)fileObj["id"] : 0;
                         string fpath = fileObj["local"]?["path"]?.ToString();
-                        bool isCompleted = fileObj["local"]?["is_downloading_completed"]?.ToObject<bool>() // правильное поле!
-                            ?? fileObj["local"]?["is_completed"]?.ToObject<bool>()
-                            ?? false;
-                        Log("FILE id=" + fid + " completed=" + isCompleted + " path=" + fpath);
-                        // Фикс: показываем файл если path есть, независимо от is_completed
+                        Log("FILE id=" + fid + " path=" + fpath);
                         if (fid != 0 && !string.IsNullOrEmpty(fpath)) {
-                            if (_fileToChatId.ContainsKey(fid)) { Log("→ Avatar chat=" + _fileToChatId[fid]); var t = UpdateAvatar(_fileToChatId[fid], fpath); }
+                            if (_fileToChatId.ContainsKey(fid)) { var t = UpdateAvatar(_fileToChatId[fid], fpath); }
                             if (_fileToMsgId.ContainsKey(fid)) {
                                 long mid = _fileToMsgId[fid];
-                                Log("→ Photo/Video msg=" + mid);
                                 var t = UpdateMessagePhoto(mid, fpath);
-                                // Если это видеофайл — сохраняем путь для открытия
                                 if (_messagesDict.ContainsKey(mid) && _messagesDict[mid].IsVideo)
                                     _messagesDict[mid].FilePath = fpath;
                             }
@@ -201,7 +191,7 @@ namespace TelegramWP10
                     }
                     break;
 
-
+                case "chats":
                     Log("chats count=" + (update["chat_ids"] as JArray)?.Count);
                     foreach (var cId in update["chat_ids"]) {
                         long cid = (long)cId;
@@ -211,12 +201,9 @@ namespace TelegramWP10
                     break;
 
                 case "messages":
-                    // messages не содержит chat_id — используем _pendingHistoryChatId
-                    // который запомнили в момент отправки getChatHistory
                     long expectedChat = _pendingHistoryChatId;
                     var msgs = update["messages"] as JArray;
                     Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count);
-                    // Показываем только если пользователь всё ещё в том же чате
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
                     _messageItems.Clear();
                     if (msgs != null) {
@@ -255,9 +242,7 @@ namespace TelegramWP10
                 if (type == "messagePhoto") {
                     var sizes = content["photo"]?["sizes"] as JArray;
                     if (sizes != null && sizes.Count > 0) {
-                        var largest = sizes[sizes.Count - 1];
-                        // в TDLib photoSize файл всегда в поле "photo"
-                        var fileToken = largest["photo"] as JObject;
+                        var fileToken = sizes[sizes.Count - 1]["photo"] as JObject;
                         Log("PHOTO msg=" + msgId + " fileToken=" + (fileToken?["id"]?.ToString() ?? "NULL")
                             + " path=" + fileToken?["local"]?["path"]);
                         if (fileToken != null) {
@@ -273,7 +258,6 @@ namespace TelegramWP10
                     }
                 } else if (type == "messageVideo") {
                     item.IsVideo = true;
-                    // Сначала пробуем получить сам видеофайл
                     var videoFile = content["video"]?["video"] as JObject;
                     var thumb = content["video"]?["thumbnail"]?["file"] as JObject;
                     if (videoFile != null) {
@@ -283,7 +267,6 @@ namespace TelegramWP10
                         string vPath = videoFile["local"]?["path"]?.ToString();
                         Log("VIDEO file id=" + vfid + " path=" + vPath);
                         if (!string.IsNullOrEmpty(vPath)) item.FilePath = vPath;
-                        // Скачиваем видео только если оно уже частично загружено (не трогаем большие файлы)
                     }
                     if (thumb != null) {
                         long tfid = (long)thumb["id"];
@@ -306,7 +289,6 @@ namespace TelegramWP10
 
         private async Task UpdateAvatar(long chatId, string path) {
             try {
-                Log("UpdateAvatar loading chat=" + chatId + " path=" + path);
                 var file = await StorageFile.GetFileFromPathAsync(path);
                 var bitmap = new BitmapImage();
                 using (var stream = await file.OpenReadAsync())
@@ -320,7 +302,6 @@ namespace TelegramWP10
 
         private async Task UpdateMessagePhoto(long msgId, string path) {
             try {
-                Log("UpdateMsgPhoto loading msg=" + msgId + " path=" + path);
                 var file = await StorageFile.GetFileFromPathAsync(path);
                 var bitmap = new BitmapImage();
                 using (var stream = await file.OpenReadAsync())
@@ -336,9 +317,9 @@ namespace TelegramWP10
 
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
             var chat = (ChatItem)e.ClickedItem;
-            if (chat.Id == _currentChatId) return; // уже в этом чате
+            if (chat.Id == _currentChatId) return;
             _currentChatId = chat.Id;
-            _pendingHistoryChatId = chat.Id; // запоминаем для какого чата ждём messages
+            _pendingHistoryChatId = chat.Id;
             CurrentChatTitle.Text = chat.Title;
             _messageItems.Clear();
             _messagesDict.Clear();
@@ -365,16 +346,6 @@ namespace TelegramWP10
 
         private async void MessagesListView_ItemClick(object sender, ItemClickEventArgs e) {
             var item = e.ClickedItem as MessageItem;
-            if (item == null || !item.IsVideo || string.IsNullOrEmpty(item.FilePath)) return;
-            try {
-                var file = await StorageFile.GetFileFromPathAsync(item.FilePath);
-                await Windows.System.Launcher.LaunchFileAsync(file);
-                Log("VIDEO launched: " + item.FilePath);
-            } catch (Exception ex) { Log("VIDEO ERR: " + ex.Message); }
-        }
-
-        private async void MessagesListView_ItemClick(object sender, ItemClickEventArgs e) {
-            var item = e.ClickedItem as MessageItem;
             if (item == null || !item.IsVideo) return;
             if (string.IsNullOrEmpty(item.FilePath)) {
                 Log("VIDEO tap — downloading");
@@ -388,6 +359,7 @@ namespace TelegramWP10
             try {
                 var file = await StorageFile.GetFileFromPathAsync(item.FilePath);
                 await Windows.System.Launcher.LaunchFileAsync(file);
+                Log("VIDEO launched: " + item.FilePath);
             } catch (Exception ex) { Log("VIDEO ERR: " + ex.Message); }
         }
 
