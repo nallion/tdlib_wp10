@@ -75,6 +75,17 @@ namespace TelegramWP10
 
         private void HandleUpdate(string type, JObject update) {
             switch (type) {
+                case "updateConnectionState":
+                    var connState = update["state"]?["@type"]?.ToString();
+                    Log("CONNECTION: " + connState);
+                    break;
+                case "updateOption":
+                    var optName = update["name"]?.ToString();
+                    if (optName == "is_test_dc") {
+                        bool isTest = update["value"]?["value"]?.ToObject<bool>() ?? false;
+                        Log(isTest ? "✓ ПОДКЛЮЧЕНО К ТЕСТОВОМУ DC" : "✗ ПОДКЛЮЧЕНО К БОЕВОМУ DC");
+                    }
+                    break;
                 case "updateAuthorizationState":
                     var s = update["authorization_state"]?["@type"]?.ToString();
                     if (s == "authorizationStateWaitPhoneNumber") LoginPanel.Visibility = Visibility.Visible;
