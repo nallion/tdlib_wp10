@@ -526,8 +526,6 @@ namespace TelegramWP10
                         else
                             TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + tfid + ",\"priority\":10,\"synchronous\":false}");
                     }
-                }
-
                 } else if (type == "messageDocument") {
                     var doc = content["document"];
                     var docFile = doc?["document"] as JObject;
