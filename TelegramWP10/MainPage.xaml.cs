@@ -28,31 +28,20 @@ namespace TelegramWP10
 
         private void SendParameters()
         {
-            try {
-                string path = Windows.Storage.ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
-                
-                // === ОБЯЗАТЕЛЬНО ЗАМЕНИ ЭТИ ДАННЫЕ ===
-                int myApiId = 26688287; // ТВОЙ API_ID (число)
-                string myApiHash = "5f4afe72bc71dc6ec40f7dcb0c9a822b"; // ТВОЙ API_HASH (строка)
-                // =====================================
-
-                JObject param = new JObject();
-                param["@type"] = "setTdlibParameters";
-                param["use_test_dc"] = false;
-                param["database_directory"] = path + "/tdlib_db";
-                param["files_directory"] = path + "/tdlib_files";
-                param["api_id"] = myApiId;
-                param["api_hash"] = myApiHash;
-                param["system_language_code"] = "ru";
-                param["device_model"] = "Lumia WP10";
-                param["system_version"] = "10.0";
-                param["application_version"] = "1.0";
-
-                TdJson.td_json_client_send(_client, param.ToString());
-                UpdateStatus("Параметры отправлены...");
-            } catch (Exception ex) {
-                UpdateStatus("Ошибка параметров: " + ex.Message);
-            }
+            string path = Windows.Storage.ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
+            JObject p = new JObject();
+            p["@type"] = "setTdlibParameters";
+            p["use_test_dc"] = false;
+            // Смена путей на v3 для полной очистки от старых чатов
+            p["database_directory"] = path + "/td_db_v3";
+            p["files_directory"] = path + "/td_files_v3";
+            p["api_id"] = 26688287; // ВСТАВЬ СВОЙ ID
+            p["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b"; // ВСТАВЬ СВОЙ HASH
+            p["system_language_code"] = "ru";
+            p["device_model"] = "Lumia";
+            p["system_version"] = "10";
+            p["application_version"] = "1.0";
+            TdJson.td_json_client_send(_client, p.ToString());
         }
 
         private void LongPolling()
@@ -67,9 +56,7 @@ namespace TelegramWP10
                         try {
                             var update = JObject.Parse(json);
                             HandleUpdate(update["@type"]?.ToString(), update);
-                        } catch (Exception ex) {
-                            UpdateStatus("Ошибка парсинга: " + ex.Message);
-                        }
+                        } catch { }
                     });
                 }
             }
@@ -81,20 +68,14 @@ namespace TelegramWP10
             {
                 case "updateAuthorizationState":
                     var state = update["authorization_state"]?["@type"]?.ToString();
-                    UpdateStatus("Статус: " + state);
-
-                    if (state == "authorizationStateWaitPhoneNumber") {
-                        LoginPanel.Visibility = Visibility.Visible;
-                    }
-                    else if (state == "authorizationStateWaitCode") {
+                    if (state == "authorizationStateWaitPhoneNumber") LoginPanel.Visibility = Visibility.Visible;
+                    if (state == "authorizationStateWaitCode") {
                         CodeInput.Visibility = Visibility.Visible;
                         CodeButton.Visibility = Visibility.Visible;
-                        UpdateStatus("Введите код из SMS");
                     }
-                    else if (state == "authorizationStateReady") {
+                    if (state == "authorizationStateReady") {
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
-                        UpdateStatus("Загрузка списка чатов...");
                         TdJson.td_json_client_send(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":20}");
                     }
                     break;
@@ -103,12 +84,17 @@ namespace TelegramWP10
                     var chat = update["chat"];
                     if (chat == null) return;
                     long id = (long)chat["id"];
-                    if (!_chatsDict.ContainsKey(id)) {
-                        var item = new ChatItem { Id = id, Title = chat["title"]?.ToString() ?? "Чат" };
+                    string title = chat["title"]?.ToString();
+
+                    // Фильтруем пустые или служебные чаты без имен
+                    if (!string.IsNullOrEmpty(title) && !_chatsDict.ContainsKey(id)) {
+                        var item = new ChatItem { Id = id, Title = title };
                         _chatsDict[id] = item;
                         _chatListItems.Add(item);
-                        if (chat["photo"]?["small"] != null) {
-                            int fId = (int)chat["photo"]["small"]["id"];
+
+                        var smallPhoto = chat["photo"]?["small"];
+                        if (smallPhoto != null) {
+                            int fId = (int)smallPhoto["id"];
                             _fileToChatId[fId] = id;
                             TdJson.td_json_client_send(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":1}");
                         }
@@ -117,16 +103,21 @@ namespace TelegramWP10
 
                 case "updateFile":
                     var file = update["file"];
+                    if (file == null) return;
                     int fileId = (int)file["id"];
-                    if (file["local"]?["is_completed"]?.Value<bool>() == true && _fileToChatId.ContainsKey(fileId)) {
-                        long cId = _fileToChatId[fileId];
-                        _chatsDict[cId].PhotoPath = file["local"]["path"]?.ToString();
+                    string localPath = file["local"]?["path"]?.ToString();
+
+                    if (!string.IsNullOrEmpty(localPath) && file["local"]?["is_completed"]?.Value<bool>() == true) {
+                        if (_fileToChatId.ContainsKey(fileId)) {
+                            long cId = _fileToChatId[fileId];
+                            if (_chatsDict.ContainsKey(cId)) {
+                                _chatsDict[cId].PhotoPath = localPath;
+                            }
+                        }
                     }
                     break;
             }
         }
-
-        private void UpdateStatus(string text) => StatusText.Text = text;
 
         private void SendPhone_Click(object sender, RoutedEventArgs e) =>
             TdJson.td_json_client_send(_client, "{\"@type\":\"setAuthenticationPhoneNumber\",\"phone_number\":\"" + PhoneInput.Text + "\"}");
@@ -135,17 +126,14 @@ namespace TelegramWP10
             TdJson.td_json_client_send(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
     }
 
-    public static class TdJson
-    {
+    public static class TdJson {
         [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern IntPtr td_json_client_create();
         [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void td_json_client_send(IntPtr client, [MarshalAs(UnmanagedType.LPStr)] string request);
         [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern IntPtr td_json_client_receive(IntPtr client, double timeout);
-
-        public static string IntPtrToStringUtf8(IntPtr ptr)
-        {
+        public static string IntPtrToStringUtf8(IntPtr ptr) {
             if (ptr == IntPtr.Zero) return null;
             int len = 0;
             while (Marshal.ReadByte(ptr, len) != 0) len++;

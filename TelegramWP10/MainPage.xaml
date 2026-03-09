@@ -9,14 +9,14 @@
         <StackPanel Padding="20">
             <TextBlock x:Name="StatusText" Text="Загрузка..." Margin="0,0,0,10" Foreground="Gray" TextWrapping="Wrap"/>
 
-            <StackPanel x:Name="LoginPanel">
+            <StackPanel x:Name="LoginPanel" Visibility="Collapsed">
                 <TextBox x:Name="PhoneInput" Header="Телефон" PlaceholderText="+7..." InputScope="TelephoneNumber"/>
                 <Button Content="Далее" Click="SendPhone_Click" HorizontalAlignment="Stretch" Margin="0,10"/>
                 <TextBox x:Name="CodeInput" Header="Код" Visibility="Collapsed" Margin="0,10"/>
                 <Button x:Name="CodeButton" Content="Войти" Click="SendCode_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
             </StackPanel>
 
-            <ListView x:Name="ChatListView" Height="600" Visibility="Collapsed" SelectionMode="None">
+            <ListView x:Name="ChatListView" Height="640" Visibility="Collapsed">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:ChatItem">
                         <Grid Margin="0,10">
@@ -24,14 +24,14 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Ellipse Width="50" Height="50">
+                            <Ellipse Width="54" Height="54" VerticalAlignment="Center">
                                 <Ellipse.Fill>
-                                    <ImageBrush ImageSource="{Binding PhotoPath}"/>
+                                    <ImageBrush ImageSource="{Binding PhotoPath}" Stretch="UniformToFill"/>
                                 </Ellipse.Fill>
                             </Ellipse>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="15,0,0,0">
                                 <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="Чат активен" FontSize="12" Foreground="Gray"/>
+                                <TextBlock Text="Активный чат" FontSize="12" Foreground="Gray"/>
                             </StackPanel>
                         </Grid>
                     </DataTemplate>

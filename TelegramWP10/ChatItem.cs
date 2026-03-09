@@ -12,11 +12,14 @@ namespace TelegramWP10
         public string PhotoPath 
         { 
             get => _photoPath; 
-            set { _photoPath = value; OnPropertyChanged(); } 
+            set { 
+                _photoPath = value; 
+                OnPropertyChanged("PhotoPath"); 
+            } 
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string prop = "") => 
+        private void OnPropertyChanged(string prop) => 
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(prop));
     }
 }
