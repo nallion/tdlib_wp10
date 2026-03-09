@@ -17,6 +17,7 @@
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5E7574B-450C-4C53-8BD3-B73C464AFCE0};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
     <AppxBundle>Never</AppxBundle>
@@ -36,8 +37,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform"><Version>6.2.14</Version></PackageReference>
-    <PackageReference Include="Newtonsoft.Json"><Version>13.0.1</Version></PackageReference>
+    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
+      <Version>6.2.14</Version>
+    </PackageReference>
+    <PackageReference Include="Newtonsoft.Json">
+      <Version>13.0.1</Version>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
@@ -63,33 +68,40 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ApplicationDefinition Include="App.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></ApplicationDefinition>
-    <Page Include="MainPage.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
+    <ApplicationDefinition Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <Page Include="MainPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
   </ItemGroup>
 
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
 
-  <Target Name="HardSignAppx" AfterTargets="AfterBuild">
+  <Target Name="FinalAppxSigning" AfterTargets="GenerateAppxPackage">
     <PropertyGroup>
       <CertFile>$(ProjectDir)MyTempCert.pfx</CertFile>
       <CertPass>12345</CertPass>
-      <SearchDir>C:\projects\tdlib-wp10\AppPackages</SearchDir>
-      
-      <SDKBin Condition="Exists('$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x86\')">$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x86\</SDKBin>
-      <SDKBin Condition="'$(SDKBin)' == '' And Exists('$(WindowsSdkDir)bin\10.0.19041.0\x86\')">$(WindowsSdkDir)bin\10.0.19041.0\x86\</SDKBin>
-      <SDKBin Condition="'$(SDKBin)' == ''">C:\Program Files (x86)\Windows Kits\10\bin\x86\</SDKBin>
+      <SDKBin>C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x86\</SDKBin>
+      <AppxDir>C:\projects\tdlib-wp10\AppPackages</AppxDir>
     </PropertyGroup>
 
-    <ItemGroup><AppxToSign Include="$(SearchDir)\**\*.appx" /></ItemGroup>
+    <ItemGroup>
+      <AppxFiles Include="$(AppxDir)\**\*.appx" />
+      <AppxFiles Include="$(AppxDir)\**\*.appxbundle" />
+    </ItemGroup>
 
-    <Message Importance="High" Text="--- ПОДПИСЬ ПАКЕТОВ (Инструменты: $(SDKBin)) ---" />
-
-    <Exec Condition="!Exists('$(CertFile)')" 
-          Command="&quot;$(SDKBin)makecert.exe&quot; -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)TempCert.cer&quot; &amp;&amp; &quot;$(SDKBin)pvk2pfx.exe&quot; -pvk &quot;$(ProjectDir)TempCert.pvk&quot; -spc &quot;$(ProjectDir)TempCert.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" />
-
-    <Exec Condition="'@(AppxToSign)' != ''"
-          Command="&quot;$(SDKBin)signtool.exe&quot; sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(AppxToSign.FullPath)&quot;" />
+    <Message Importance="High" Text="--- НАЧАЛО ПРОЦЕССА ПОДПИСИ ---" />
     
-    <Message Importance="High" Text="--- ГОТОВО. ПОДПИСАНО: @(AppxToSign->Count()) ---" />
+    <Exec Condition="!Exists('$(CertFile)')" 
+          Command="&quot;$(SDKBin)makecert.exe&quot; -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)Temp.cer&quot; &amp;&amp; &quot;$(SDKBin)pvk2pfx.exe&quot; -pvk &quot;$(ProjectDir)Temp.pvk&quot; -spc &quot;$(ProjectDir)Temp.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" />
+
+    <Message Importance="High" Text="Подписываю файл: %(AppxFiles.FullPath)" Condition="'@(AppxFiles)' != ''" />
+    <Exec Command="&quot;$(SDKBin)signtool.exe&quot; sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(AppxFiles.FullPath)&quot;" 
+          Condition="'@(AppxFiles)' != ''" />
+    
+    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА (Файлов: @(AppxFiles->Count())) ---" />
   </Target>
 </Project>
