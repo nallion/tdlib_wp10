@@ -18,11 +18,8 @@ namespace TelegramWP10
         private ObservableCollection<MessageItem> _messageItems = new ObservableCollection<MessageItem>();
         private Dictionary<long, ChatItem> _chatsDict = new Dictionary<long, ChatItem>();
         private Dictionary<long, long> _fileToChatId = new Dictionary<long, long>();
-        
-        // Словари для вложений
         private Dictionary<long, long> _fileToMsgId = new Dictionary<long, long>();
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
-        
         private long _currentChatId = 0;
 
         public MainPage()
@@ -41,7 +38,7 @@ namespace TelegramWP10
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v20", 
+                ["database_directory"] = path + "/td_db_v21", 
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
@@ -87,8 +84,10 @@ namespace TelegramWP10
                 case "updateNewChat":
                     var c = update["chat"];
                     long id = (long)c["id"];
-                    var chatItem = new ChatItem { Id = id, Title = c["title"]?.ToString() };
-                    _chatsDict[id] = chatItem;
+                    if (!_chatsDict.ContainsKey(id)) {
+                        var chatItem = new ChatItem { Id = id, Title = c["title"]?.ToString() };
+                        _chatsDict[id] = chatItem;
+                    }
                     var photo = c["photo"]?["small"];
                     if (photo != null) {
                         long fId = (long)photo["id"];
@@ -102,22 +101,26 @@ namespace TelegramWP10
                     if (f != null && (bool)f["local"]["is_completed"]) {
                         long fid = (long)f["id"];
                         string path = f["local"]["path"]?.ToString();
-                        if (_fileToChatId.ContainsKey(fid)) var t = UpdateAvatar(_fileToChatId[fid], path);
-                        if (_fileToMsgId.ContainsKey(fid)) var t = UpdateMessagePhoto(_fileToMsgId[fid], path);
+                        // ИСПРАВЛЕНО: убрали 'var t =' внутри if
+                        if (_fileToChatId.ContainsKey(fid)) UpdateAvatar(_fileToChatId[fid], path);
+                        if (_fileToMsgId.ContainsKey(fid)) UpdateMessagePhoto(_fileToMsgId[fid], path);
                     }
                     break;
 
                 case "chats":
                     foreach (var cId in update["chat_ids"]) {
-                        if (_chatsDict.ContainsKey((long)cId)) _chatListItems.Add(_chatsDict[(long)cId]);
+                        if (_chatsDict.ContainsKey((long)cId) && !_chatListItems.Contains(_chatsDict[(long)cId]))
+                            _chatListItems.Add(_chatsDict[(long)cId]);
                     }
                     break;
 
                 case "messages":
-                    _messageItems.Clear();
-                    foreach (var m in update["messages"]) {
-                        var item = ParseMessage(m);
-                        if (item != null) _messageItems.Insert(0, item);
+                    if ((long)update["messages"][0]["chat_id"] == _currentChatId) {
+                        _messageItems.Clear();
+                        foreach (var m in update["messages"]) {
+                            var item = ParseMessage(m);
+                            if (item != null) _messageItems.Insert(0, item);
+                        }
                     }
                     break;
             }
@@ -133,7 +136,7 @@ namespace TelegramWP10
                 Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
             };
 
-            if (msg["reply_to_message_id"]?.Value<long>() != 0) item.ReplyToText = "Цитата";
+            if (msg["reply_to_message_id"]?.Value<long>() != 0) item.ReplyToText = "Ответ";
 
             string type = msg["content"]["@type"].ToString();
             if (type == "messagePhoto") {
@@ -155,19 +158,21 @@ namespace TelegramWP10
 
         private void ProcessFile(long fId, string path, bool isReady) {
             if (isReady) {
-                if (_fileToChatId.ContainsKey(fId)) var t = UpdateAvatar(_fileToChatId[fId], path);
-                if (_fileToMsgId.ContainsKey(fId)) var t = UpdateMessagePhoto(_fileToMsgId[fId], path);
+                // ИСПРАВЛЕНО: убрали 'var t =' внутри if
+                if (_fileToChatId.ContainsKey(fId)) UpdateAvatar(_fileToChatId[fId], path);
+                if (_fileToMsgId.ContainsKey(fId)) UpdateMessagePhoto(_fileToMsgId[fId], path);
             } else {
                 TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":10}");
             }
         }
 
         private async Task UpdateAvatar(long chatId, string path) {
-            await Task.Delay(200);
+            await Task.Delay(300);
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () => {
                 try {
                     var bitmap = new BitmapImage();
-                    using (var stream = await (await StorageFile.GetFileFromPathAsync(path)).OpenReadAsync()) {
+                    var file = await StorageFile.GetFileFromPathAsync(path);
+                    using (var stream = await file.OpenReadAsync()) {
                         await bitmap.SetSourceAsync(stream);
                         if (_chatsDict.ContainsKey(chatId)) _chatsDict[chatId].Photo = bitmap;
                     }
@@ -176,18 +181,54 @@ namespace TelegramWP10
         }
 
         private async Task UpdateMessagePhoto(long msgId, string path) {
-            await Task.Delay(200);
+            await Task.Delay(300);
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () => {
                 try {
                     var bitmap = new BitmapImage();
-                    using (var stream = await (await StorageFile.GetFileFromPathAsync(path)).OpenReadAsync()) {
+                    var file = await StorageFile.GetFileFromPathAsync(path);
+                    using (var stream = await file.OpenReadAsync()) {
                         await bitmap.SetSourceAsync(stream);
                         if (_messagesDict.ContainsKey(msgId)) _messagesDict[msgId].AttachedPhoto = bitmap;
                     }
                 } catch { }
             });
         }
-        
-        // ... Методы кнопок Back, Send, Login оставить прежними
+
+        private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
+            var chat = (ChatItem)e.ClickedItem;
+            _currentChatId = chat.Id;
+            CurrentChatTitle.Text = chat.Title;
+            _messageItems.Clear();
+            _messagesDict.Clear();
+            StartPanel.Visibility = Visibility.Collapsed;
+            MessagesPanel.Visibility = Visibility.Visible;
+            TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50,\"only_local\":false}");
+        }
+
+        private void SendMessage_Click(object sender, RoutedEventArgs e) {
+            if (string.IsNullOrWhiteSpace(MessageInput.Text) || _currentChatId == 0) return;
+            JObject req = new JObject {
+                ["@type"] = "sendMessage",
+                ["chat_id"] = _currentChatId,
+                ["input_message_content"] = new JObject {
+                    ["@type"] = "inputMessageText",
+                    ["text"] = new JObject { ["@type"] = "formattedText", ["text"] = MessageInput.Text }
+                }
+            };
+            TdJson.SendUtf8(_client, req.ToString());
+            MessageInput.Text = "";
+        }
+
+        private void BackButton_Click(object sender, RoutedEventArgs e) {
+            _currentChatId = 0;
+            MessagesPanel.Visibility = Visibility.Collapsed;
+            StartPanel.Visibility = Visibility.Visible;
+        }
+
+        private void SendPhone_Click(object sender, RoutedEventArgs e) =>
+            TdJson.SendUtf8(_client, "{\"@type\":\"setAuthenticationPhoneNumber\",\"phone_number\":\"" + PhoneInput.Text + "\"}");
+
+        private void SendCode_Click(object sender, RoutedEventArgs e) =>
+            TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
     }
 }
