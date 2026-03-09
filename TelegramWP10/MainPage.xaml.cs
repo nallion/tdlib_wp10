@@ -335,10 +335,13 @@ namespace TelegramWP10
                         break;
                     }
                     _messageItems.Clear();
+                    long lastMsgId = 0;
                     for (int i = msgs.Count - 1; i >= 0; i--) {
                         var item = ParseMessage(msgs[i]);
                         if (item != null) _messageItems.Add(item);
                     }
+                    // id последнего (самого нового) сообщения — первый элемент массива TDLib
+                    lastMsgId = msgs[0]?["id"]?.ToObject<long>() ?? 0;
                     Log("rendered " + _messageItems.Count + " messages");
                     _isLoadingHistory = false;
                     LoadingIndicator.Visibility = Visibility.Collapsed;
@@ -347,6 +350,9 @@ namespace TelegramWP10
                         MessagesListView.UpdateLayout();
                         MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
                     }
+                    // Помечаем сообщения как прочитанные — TDLib пришлёт updateChatReadInbox с unread_count=0
+                    if (lastMsgId != 0)
+                        TdJson.SendUtf8(_client, "{\"@type\":\"viewMessages\",\"chat_id\":" + expectedChat + ",\"message_ids\":[" + lastMsgId + "],\"force_read\":true}");
                     break;
             }
         }
