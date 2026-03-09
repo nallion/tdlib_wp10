@@ -363,27 +363,24 @@ namespace TelegramWP10
             MessageInput.Text = "";
         }
 
-        private async void VideoPlay_Click(object sender, RoutedEventArgs e) {
-            var btn = sender as Button;
-            var item = btn?.DataContext as MessageItem;
-            if (item == null || string.IsNullOrEmpty(item.FilePath)) {
-                // Файл ещё не скачан — скачиваем
-                if (item != null) {
-                    Log("VIDEO click — file not ready, downloading");
-                    // Ищем file_id для этого сообщения
-                    foreach (var kv in _fileToMsgId)
-                        if (kv.Value == item.Id) {
-                            TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + kv.Key + ",\"priority\":32,\"synchronous\":false}");
-                            break;
-                        }
-                }
+        private async void VideoImage_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e) {
+            var img = sender as Image;
+            var item = img?.DataContext as MessageItem;
+            if (item == null || !item.IsVideo) return;
+            if (string.IsNullOrEmpty(item.FilePath)) {
+                Log("VIDEO tap — not ready, downloading");
+                foreach (var kv in _fileToMsgId)
+                    if (kv.Value == item.Id) {
+                        TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + kv.Key + ",\"priority\":32,\"synchronous\":false}");
+                        break;
+                    }
                 return;
             }
             try {
                 var file = await StorageFile.GetFileFromPathAsync(item.FilePath);
                 await Windows.System.Launcher.LaunchFileAsync(file);
                 Log("VIDEO launched: " + item.FilePath);
-            } catch (Exception ex) { Log("VIDEO launch ERR: " + ex.Message); }
+            } catch (Exception ex) { Log("VIDEO ERR: " + ex.Message); }
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) {

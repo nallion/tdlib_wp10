@@ -63,12 +63,8 @@
                                 </Border>
 
                                 <Grid Visibility="{Binding PhotoVisibility}" Margin="0,0,0,5">
-                                    <Image Source="{Binding AttachedPhoto}" Stretch="Uniform" MaxWidth="250"/>
-                                    <Button Background="Transparent" BorderThickness="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                            Visibility="{Binding VideoIconVisibility}" Click="VideoPlay_Click" Padding="0">
-                                        <TextBlock Text="▶" Foreground="White" FontSize="40"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.85"/>
-                                    </Button>
+                                    <Image Source="{Binding AttachedPhoto}" Stretch="Uniform" MaxWidth="250" Tapped="VideoImage_Tapped"/>
+                                    <TextBlock Text="▶" Foreground="White" FontSize="40" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding VideoIconVisibility}" Opacity="0.8" IsHitTestVisible="False"/>
                                 </Grid>
 
                                 <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="White" FontSize="16"/>
