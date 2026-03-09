@@ -148,13 +148,19 @@ namespace TelegramWP10
                 case "updateNewChat":
                     var c = update["chat"];
                     long chatId = (long)c["id"];
+                    Log("updateNewChat id=" + chatId + " _isAuthorized=" + _isAuthorized
+                        + " LoginPanel=" + LoginPanel.Visibility
+                        + " ChatListView=" + ChatListView.Visibility
+                        + " StartPanel=" + StartPanel.Visibility);
                     // Если пришёл updateNewChat — TDLib уже авторизован (сессия сохранена)
                     if (!_isAuthorized) {
                         _isAuthorized = true;
-                        Log("AUTH via updateNewChat (saved session)");
+                        Log("AUTH via updateNewChat (saved session) — switching UI");
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
+                        Log("After switch: LoginPanel=" + LoginPanel.Visibility + " ChatListView=" + ChatListView.Visibility);
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
+                        Log("getChats sent");
                     }
                     if (!_chatsDict.ContainsKey(chatId))
                         _chatsDict[chatId] = new ChatItem { Id = chatId, Title = c["title"]?.ToString() };
@@ -232,6 +238,19 @@ namespace TelegramWP10
                         if (_chatsDict.ContainsKey(cid) && !_chatListItems.Contains(_chatsDict[cid]))
                             _chatListItems.Add(_chatsDict[cid]);
                     }
+                    break;
+
+                case "chats":
+                    Log("chats received count=" + (update["chat_ids"] as JArray)?.Count
+                        + " ChatListView=" + ChatListView.Visibility
+                        + " _chatListItems=" + _chatListItems.Count
+                        + " _chatsDict=" + _chatsDict.Count);
+                    foreach (var cId in update["chat_ids"]) {
+                        long cid = (long)cId;
+                        if (_chatsDict.ContainsKey(cid) && !_chatListItems.Contains(_chatsDict[cid]))
+                            _chatListItems.Add(_chatsDict[cid]);
+                    }
+                    Log("chats after fill _chatListItems=" + _chatListItems.Count);
                     break;
 
                 case "messages":
