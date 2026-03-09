@@ -42,6 +42,7 @@ namespace TelegramWP10
             StartPanel.Visibility = Visibility.Visible;
             LoadingIndicator.Visibility = Visibility.Collapsed;
             MessagesListView.Visibility = Visibility.Collapsed;
+            LogoutButton.Visibility = Visibility.Collapsed;
             InitAsync();
         }
 
@@ -137,11 +138,23 @@ namespace TelegramWP10
                         _isAuthorized = true;
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
+                        LogoutButton.Visibility = Visibility.Visible;
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
                     }
                     if (s == "authorizationStateLoggingOut" || s == "authorizationStateClosed") {
+                        _isAuthorized = false;
+                        _chatListItems.Clear();
+                        _chatsDict.Clear();
+                        ChatListView.Visibility = Visibility.Collapsed;
+                        LogoutButton.Visibility = Visibility.Collapsed;
                         LoginPanel.Visibility = Visibility.Visible;
-                        LoginStatus.Text = "Выход...";
+                        LoginStatus.Text = "Введите номер телефона";
+                        PhoneInput.Text = "";
+                        PhoneInput.IsEnabled = true;
+                        PhoneButton.IsEnabled = true;
+                        CodeInput.Visibility = Visibility.Collapsed;
+                        CodeButton.Visibility = Visibility.Collapsed;
+                        LoginStatus.Text = "";
                     }
                     break;
 
@@ -166,6 +179,7 @@ namespace TelegramWP10
                         Log("AUTH via updateNewChat (saved session) — switching UI");
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
+                        LogoutButton.Visibility = Visibility.Visible;
                         Log("After switch: LoginPanel=" + LoginPanel.Visibility + " ChatListView=" + ChatListView.Visibility);
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
                         Log("getChats sent");
@@ -451,6 +465,10 @@ namespace TelegramWP10
                 await Windows.System.Launcher.LaunchFileAsync(file);
                 Log("VIDEO launched: " + item.FilePath);
             } catch (Exception ex) { Log("VIDEO ERR: " + ex.Message); }
+        }
+
+        private void LogoutButton_Click(object sender, RoutedEventArgs e) {
+            TdJson.SendUtf8(_client, "{\"@type\":\"logOut\"}");
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) {

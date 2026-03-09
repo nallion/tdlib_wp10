@@ -13,6 +13,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <StackPanel x:Name="LoginPanel" Grid.Row="0" Visibility="Visible" Margin="0,0,0,10">
@@ -51,6 +52,11 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+
+            <Button x:Name="LogoutButton" Grid.Row="2" Content="Выход" Click="LogoutButton_Click"
+                    HorizontalAlignment="Stretch" Margin="0,8,0,0"
+                    Background="#AA222222" Foreground="#FF4444"
+                    Visibility="Collapsed"/>
         </Grid>
 
         <Grid x:Name="MessagesPanel" Visibility="Collapsed" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
