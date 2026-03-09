@@ -3,6 +3,7 @@ platform: ARM
 configuration: Release
 
 build_script:
+  - dir "C:\Program Files (x86)\Windows Kits\10\bin\"
   - msbuild TelegramWP10.sln /t:restore
   # Добавляем флаг вывода в конкретную папку для артефактов
   - msbuild TelegramWP10.sln /p:Configuration=Release /p:Platform=ARM /p:AppxPackageSigningEnabled=false /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxBundle=Never /p:AppxPackageDir="C:\projects\tdlib-wp10\AppPackages" /m
