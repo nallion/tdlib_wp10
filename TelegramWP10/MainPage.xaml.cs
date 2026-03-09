@@ -23,7 +23,7 @@ namespace TelegramWP10
         private long _pendingHistoryChatId = 0;
         private string _dbPath = "";
         private bool _connectionReady = false;
-        private bool _isAuthorized = false;
+        private bool _isLoadingHistory = false;
         private long _pendingChatHistoryId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
@@ -201,8 +201,7 @@ namespace TelegramWP10
                     long newMsgChatId = newMsg?["chat_id"]?.ToObject<long>() ?? 0;
                     Log("updateNewMessage chat=" + newMsgChatId + " current=" + _currentChatId);
                     // Игнорируем если история ещё не загружена (LoadingIndicator видим)
-                    if (newMsgChatId == _currentChatId && newMsg != null
-                        && LoadingIndicator.Visibility == Visibility.Collapsed) {
+                    if (newMsgChatId == _currentChatId && newMsg != null && !_isLoadingHistory) {
                         var newItem = ParseMessage(newMsg);
                         if (newItem != null) {
                             _messageItems.Add(newItem);
@@ -272,6 +271,7 @@ namespace TelegramWP10
                     }
                     Log("rendered " + _messageItems.Count + " messages");
                     // Показываем список только когда сообщения загружены
+                    _isLoadingHistory = false;
                     LoadingIndicator.Visibility = Visibility.Collapsed;
                     MessagesListView.Visibility = Visibility.Visible;
                     var ignored2 = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => {
@@ -390,6 +390,7 @@ namespace TelegramWP10
             StartPanel.Visibility = Visibility.Collapsed;
             MessagesPanel.Visibility = Visibility.Visible;
             CurrentChatTitle.Text = chat.Title;
+            _isLoadingHistory = true;
             LoadingIndicator.Visibility = Visibility.Visible;
             MessagesListView.Visibility = Visibility.Collapsed;
             Log("OPEN CHAT id=" + _currentChatId + " title=" + chat.Title);
