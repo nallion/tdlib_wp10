@@ -28,7 +28,7 @@ namespace TelegramWP10
         private void SendParameters()
         {
             string path = Windows.Storage.ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
-            string json = "{\"@type\":\"setTdlibParameters\",\"use_test_dc\":false,\"database_directory\":\"" + path + "/db\",\"files_directory\":\"" + path + "/files\",\"api_id\":ВАШ_ID,\"api_hash\":\"ВАШ_HASH\",\"system_language_code\":\"ru\",\"device_model\":\"Lumia\",\"system_version\":\"WP10\",\"application_version\":\"1.0\"}";
+            string json = "{\"@type\":\"setTdlibParameters\",\"use_test_dc\":false,\"database_directory\":\"" + path + "/db\",\"files_directory\":\"" + path + "/files\",\"api_id\":26688287,\"api_hash\":\"5f4afe72bc71dc6ec40f7dcb0c9a822b\",\"system_language_code\":\"ru\",\"device_model\":\"Lumia\",\"system_version\":\"WP10\",\"application_version\":\"1.0\"}";
             TdJson.td_json_client_send(_client, json);
         }
 
