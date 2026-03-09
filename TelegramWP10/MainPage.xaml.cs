@@ -104,6 +104,7 @@ namespace TelegramWP10
                             string type = update["@type"]?.ToString();
                             if (type != "updateOption" && type != "updateChatLastMessage" &&
                                 type != "updateChatReadInbox" && type != "updateChatReadOutbox" &&
+                                type != "updateMessageInteractionInfo" &&
                                 type != "updateChatPosition" && type != "updateChatPermissions")
                                 Log("← " + type + " | " + json.Substring(0, Math.Min(json.Length, 300)));
                             HandleUpdate(type, update);
@@ -322,6 +323,16 @@ namespace TelegramWP10
                         _chatsDict[ucriId].UnreadCount = update["unread_count"]?.ToObject<int>() ?? 0;
                     break;
 
+                case "updateMessageInteractionInfo":
+                    long umiChatId = update["chat_id"]?.ToObject<long>() ?? 0;
+                    long umiMsgId = update["message_id"]?.ToObject<long>() ?? 0;
+                    if (umiChatId == _currentChatId && _messagesDict.ContainsKey(umiMsgId)) {
+                        var reacts = update["interaction_info"]?["reactions"]?["reactions"] as JArray;
+                        _messagesDict[umiMsgId].Reactions = reacts != null && reacts.Count > 0
+                            ? BuildReactionsString(reacts) : "";
+                    }
+                    break;
+
                 case "updateChatReadOutbox":
                     long ucrId = update["chat_id"]?.ToObject<long>() ?? 0;
                     if (ucrId != 0 && _chatsDict.ContainsKey(ucrId))
@@ -485,6 +496,11 @@ namespace TelegramWP10
                 var replyTo = msg["reply_to"];
                 if (replyTo != null && replyTo["@type"]?.ToString() == "messageReplyToMessage")
                     item.ReplyToText = "Ответ на сообщение";
+
+                // Реакции
+                var reactions = msg["interaction_info"]?["reactions"]?["reactions"] as JArray;
+                if (reactions != null && reactions.Count > 0)
+                    item.Reactions = BuildReactionsString(reactions);
 
                 if (type == "messagePhoto") {
                     var sizes = content["photo"]?["sizes"] as JArray;
@@ -661,6 +677,51 @@ namespace TelegramWP10
                     }
                 }
             }
+        }
+
+        private string BuildReactionsString(JArray reactions) {
+            var parts = new System.Text.StringBuilder();
+            foreach (var r in reactions) {
+                string emoji = r["type"]?["emoji"]?.ToString() ?? "👍";
+                int count = r["total_count"]?.ToObject<int>() ?? 0;
+                if (count > 0) {
+                    if (parts.Length > 0) parts.Append("  ");
+                    parts.Append(emoji);
+                    if (count > 1) parts.Append(" " + count);
+                }
+            }
+            return parts.ToString();
+        }
+
+        private async void AttachFile_Click(object sender, RoutedEventArgs e) {
+            if (_currentChatId == 0) return;
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            picker.FileTypeFilter.Add("*");
+            var file = await picker.PickSingleFileAsync();
+            if (file == null) return;
+            Log("ATTACH file=" + file.Path + " name=" + file.Name);
+            // Копируем файл в папку приложения чтобы TDLib мог его прочитать
+            var copy = await file.CopyAsync(_filesFolder, file.Name, Windows.Storage.NameCollisionOption.ReplaceExisting);
+            string path = copy.Path;
+            // Отправляем как документ
+            var req = new Newtonsoft.Json.Linq.JObject {
+                ["@type"] = "sendMessage",
+                ["chat_id"] = _currentChatId,
+                ["input_message_content"] = new Newtonsoft.Json.Linq.JObject {
+                    ["@type"] = "inputMessageDocument",
+                    ["document"] = new Newtonsoft.Json.Linq.JObject {
+                        ["@type"] = "inputFileLocal",
+                        ["path"] = path
+                    },
+                    ["caption"] = new Newtonsoft.Json.Linq.JObject {
+                        ["@type"] = "formattedText",
+                        ["text"] = ""
+                    }
+                }
+            };
+            TdJson.SendUtf8(_client, req.ToString(Newtonsoft.Json.Formatting.None));
+            Log("SEND DOC path=" + path);
         }
 
         private void LogoutButton_Click(object sender, RoutedEventArgs e) {

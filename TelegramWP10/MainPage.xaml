@@ -147,6 +147,10 @@
 
                                 <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="White" FontSize="16"/>
                                 <TextBlock Text="{Binding Date}" FontSize="10" Foreground="#AAAAAA" HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                                <!-- Реакции -->
+                                <Border Visibility="{Binding ReactionsVisibility}" Background="#22FFFFFF" CornerRadius="10" Padding="6,3" Margin="0,4,0,0" HorizontalAlignment="Left">
+                                    <TextBlock Text="{Binding Reactions}" FontSize="14"/>
+                                </Border>
                             </StackPanel>
                         </Border>
                     </DataTemplate>
@@ -160,11 +164,14 @@
 
             <Grid Grid.Row="2" Padding="10" Background="#222222">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="MessageInput" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="100"/>
-                <Button Grid.Column="1" Content="➤" Click="SendMessage_Click" Margin="10,0,0,0" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
+                <Button Content="📎" Click="AttachFile_Click" Width="44" Height="40"
+                        Background="Transparent" Foreground="White" FontSize="18" Padding="0"/>
+                <TextBox x:Name="MessageInput" Grid.Column="1" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="100" Margin="8,0"/>
+                <Button Grid.Column="2" Content="➤" Click="SendMessage_Click" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
             </Grid>
         </Grid>
     </Grid>
