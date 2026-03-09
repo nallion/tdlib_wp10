@@ -200,7 +200,9 @@ namespace TelegramWP10
                     var newMsg = update["message"];
                     long newMsgChatId = newMsg?["chat_id"]?.ToObject<long>() ?? 0;
                     Log("updateNewMessage chat=" + newMsgChatId + " current=" + _currentChatId);
-                    if (newMsgChatId == _currentChatId && newMsg != null) {
+                    // Игнорируем если история ещё не загружена (LoadingIndicator видим)
+                    if (newMsgChatId == _currentChatId && newMsg != null
+                        && LoadingIndicator.Visibility == Visibility.Collapsed) {
                         var newItem = ParseMessage(newMsg);
                         if (newItem != null) {
                             _messageItems.Add(newItem);
