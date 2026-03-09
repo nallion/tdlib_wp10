@@ -2,7 +2,7 @@
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">ARM</Platform>
     <ProjectGuid>{4F0E3D1A-9B2C-4E7B-8D5A-6C9F1A2B3C4D}</ProjectGuid>
     <OutputType>AppContainerExe</OutputType>
@@ -11,7 +11,7 @@
     <AssemblyName>TelegramWP10</AssemblyName>
     <DefaultLanguage>ru-RU</DefaultLanguage>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
-    <TargetPlatformVersion Condition=" '$(TargetPlatformVersion)' == '' ">10.0.17763.0</TargetPlatformVersion>
+    <TargetPlatformVersion>10.0.17763.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.10240.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
     <FileAlignment>512</FileAlignment>
@@ -20,7 +20,7 @@
     
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
-    <AppxBundle>Always</AppxBundle>
+    <AppxBundle>Never</AppxBundle>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|ARM'">
@@ -94,31 +94,36 @@
 
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
 
-  <Target Name="AutoSignAppx" AfterTargets="_BundleAppx;GenerateAppx">
+  <Target Name="PostBuildSign" AfterTargets="GenerateAppxPackage">
     <PropertyGroup>
       <CertFile>$(ProjectDir)MyTempCert.pfx</CertFile>
       <CertPass>12345</CertPass>
-      <WinSDKPath>C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\</WinSDKPath>
-      <WinSDKPath Condition="!Exists('$(WinSDKPath)')">C:\Program Files (x86)\Windows Kits\10\bin\x86\</WinSDKPath>
       
-      <SignToolCmd>"$(WinSDKPath)signtool.exe"</SignToolCmd>
-      <MakeCertCmd>"$(WinSDKPath)makecert.exe"</MakeCertCmd>
-      <Pvk2PfxCmd>"$(WinSDKPath)pvk2pfx.exe"</Pvk2PfxCmd>
+      <SdkPath Condition="Exists('C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\')">C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\</SdkPath>
+      <SdkPath Condition="'$(SdkPath)' == ''">C:\Program Files (x86)\Windows Kits\10\bin\x86\</SdkPath>
+      
+      <SignToolCmd>"$(SdkPath)signtool.exe"</SignToolCmd>
+      <MakeCertCmd>"$(SdkPath)makecert.exe"</MakeCertCmd>
+      <Pvk2PfxCmd>"$(SdkPath)pvk2pfx.exe"</Pvk2PfxCmd>
+      
+      <AppxOutputDir>C:\projects\tdlib-wp10\AppPackages</AppxOutputDir>
     </PropertyGroup>
 
     <ItemGroup>
-      <FilesToSign Include="$(AppxPackageTestDir)\**\*.appx" />
-      <FilesToSign Include="$(AppxPackageTestDir)\**\*.appxbundle" />
+      <FilesToSign Include="$(AppxOutputDir)\**\*.appx" />
+      <FilesToSign Include="$(AppxOutputDir)\**\*.appxbundle" />
     </ItemGroup>
 
-    <Message Importance="High" Text="--- НАЧАЛО ПОДПИСИ ПАКЕТОВ ---" />
+    <Message Importance="High" Text="--- ФИНАЛЬНАЯ ПОДПИСЬ ПАКЕТОВ ---" />
+    <Message Importance="High" Text="Поиск в: $(AppxOutputDir)" />
 
     <Exec Condition="!Exists('$(CertFile)')" 
-          Command="$(MakeCertCmd) -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)Temp.cer&quot; &amp;&amp; $(Pvk2PfxCmd) -pvk &quot;$(ProjectDir)Temp.pvk&quot; -spc &quot;$(ProjectDir)Temp.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" />
+          Command="$(MakeCertCmd) -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)TempCert.cer&quot; &amp;&amp; $(Pvk2PfxCmd) -pvk &quot;$(ProjectDir)TempCert.pvk&quot; -spc &quot;$(ProjectDir)TempCert.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" />
 
     <Exec Command="$(SignToolCmd) sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(FilesToSign.Identity)&quot;" 
           Condition="'@(FilesToSign)' != ''" />
-
-    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА ---" />
+    
+    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА (Подписано файлов: @(FilesToSign->Count())) ---" />
   </Target>
+
 </Project>
