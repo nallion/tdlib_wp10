@@ -23,6 +23,7 @@ namespace TelegramWP10
         private long _pendingHistoryChatId = 0;
         private string _dbPath = "";
         private bool _connectionReady = false;
+        private bool _isAuthorized = false;
         private bool _isLoadingHistory = false;
         private long _pendingChatHistoryId = 0;
         private StorageFolder _filesFolder = null;
