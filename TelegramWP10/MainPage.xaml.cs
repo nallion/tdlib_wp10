@@ -44,7 +44,6 @@ namespace TelegramWP10
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["database_directory"] = path + "/td_db_v40", 
-                ["use_test_dc"] = true; // УСТАНОВИ TRUE ЗДЕСЬ
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
