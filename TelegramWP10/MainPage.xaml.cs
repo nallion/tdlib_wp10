@@ -25,6 +25,7 @@ namespace TelegramWP10
         private bool _connectionReady = false;
         private bool _isAuthorized = false;
         private bool _isLoadingHistory = false;
+        private bool _needScrollToBottom = false;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
 
@@ -232,7 +233,7 @@ namespace TelegramWP10
                         var newItem = ParseMessage(newMsg);
                         if (newItem != null) {
                             _messageItems.Add(newItem);
-                            var sv = FindScrollViewer(MessagesListView); sv?.ScrollToVerticalOffset(double.MaxValue);
+                            ScrollToBottom();
                         }
                     }
                     break;
@@ -340,15 +341,23 @@ namespace TelegramWP10
                     }
                     Log("rendered " + _messageItems.Count + " messages");
                     _isLoadingHistory = false;
+                    _needScrollToBottom = true;
                     LoadingIndicator.Visibility = Visibility.Collapsed;
                     MessagesListView.Visibility = Visibility.Visible;
-                    // Скроллим вниз после того как ListView отрендерит элементы
-                    var ignored2 = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => {
-                        var scrollViewer = FindScrollViewer(MessagesListView);
-                        scrollViewer?.ScrollToVerticalOffset(double.MaxValue);
-                    });
                     break;
             }
+        }
+
+        private void MessagesListView_SizeChanged(object sender, SizeChangedEventArgs e) {
+            if (_needScrollToBottom) {
+                _needScrollToBottom = false;
+                ScrollToBottom();
+            }
+        }
+
+        private void ScrollToBottom() {
+            var sv = FindScrollViewer(MessagesListView);
+            sv?.ScrollToVerticalOffset(sv.ScrollableHeight);
         }
 
         private ScrollViewer FindScrollViewer(DependencyObject element) {
