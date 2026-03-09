@@ -53,7 +53,7 @@
                 <TextBlock x:Name="CurrentChatTitle" Text="Чат" Foreground="White" FontSize="18" VerticalAlignment="Center" Margin="10,0"/>
             </StackPanel>
 
-            <ListView x:Name="MessagesListView" Grid.Row="1" SelectionMode="None" Padding="10">
+            <ListView x:Name="MessagesListView" Grid.Row="1" SelectionMode="None" Padding="10" IsItemClickEnabled="True" ItemClick="MessagesListView_ItemClick">
                 <ListView.ItemTemplate>
                     <DataTemplate>
                         <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}">
@@ -63,7 +63,7 @@
                                 </Border>
 
                                 <Grid Visibility="{Binding PhotoVisibility}" Margin="0,0,0,5">
-                                    <Image Source="{Binding AttachedPhoto}" Stretch="Uniform" MaxWidth="250" Tapped="VideoImage_Tapped"/>
+                                    <Image Source="{Binding AttachedPhoto}" Stretch="Uniform" MaxWidth="250"/>
                                     <TextBlock Text="▶" Foreground="White" FontSize="40" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding VideoIconVisibility}" Opacity="0.8" IsHitTestVisible="False"/>
                                 </Grid>
 

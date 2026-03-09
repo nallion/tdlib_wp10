@@ -363,12 +363,21 @@ namespace TelegramWP10
             MessageInput.Text = "";
         }
 
-        private async void VideoImage_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e) {
-            var img = sender as Image;
-            var item = img?.DataContext as MessageItem;
+        private async void MessagesListView_ItemClick(object sender, ItemClickEventArgs e) {
+            var item = e.ClickedItem as MessageItem;
+            if (item == null || !item.IsVideo || string.IsNullOrEmpty(item.FilePath)) return;
+            try {
+                var file = await StorageFile.GetFileFromPathAsync(item.FilePath);
+                await Windows.System.Launcher.LaunchFileAsync(file);
+                Log("VIDEO launched: " + item.FilePath);
+            } catch (Exception ex) { Log("VIDEO ERR: " + ex.Message); }
+        }
+
+        private async void MessagesListView_ItemClick(object sender, ItemClickEventArgs e) {
+            var item = e.ClickedItem as MessageItem;
             if (item == null || !item.IsVideo) return;
             if (string.IsNullOrEmpty(item.FilePath)) {
-                Log("VIDEO tap — not ready, downloading");
+                Log("VIDEO tap — downloading");
                 foreach (var kv in _fileToMsgId)
                     if (kv.Value == item.Id) {
                         TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + kv.Key + ",\"priority\":32,\"synchronous\":false}");
@@ -379,7 +388,6 @@ namespace TelegramWP10
             try {
                 var file = await StorageFile.GetFileFromPathAsync(item.FilePath);
                 await Windows.System.Launcher.LaunchFileAsync(file);
-                Log("VIDEO launched: " + item.FilePath);
             } catch (Exception ex) { Log("VIDEO ERR: " + ex.Message); }
         }
 
