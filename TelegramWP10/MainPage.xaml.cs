@@ -84,7 +84,11 @@ namespace TelegramWP10
                     var c = update["chat"]; long id = (long)c["id"];
                     if (!_chatsDict.ContainsKey(id)) _chatsDict[id] = new ChatItem { Id = id, Title = c["title"]?.ToString() };
                     var p = c["photo"]?["small"];
-                    if (p != null) { _fileToChatId[(long)p["id"]] = id; ProcessFile((long)p["id"], p["local"]?["path"]?.ToString(), (bool)p["local"]["is_completed"]); }
+                    if (p != null) {
+                        // Fix bug 1: register file mapping BEFORE processing so UpdateAvatar can find the chat
+                        _fileToChatId[(long)p["id"]] = id;
+                        ProcessFile((long)p["id"], p["local"]?["path"]?.ToString(), (bool)p["local"]["is_completed"]);
+                    }
                     break;
                 case "updateFile":
                     var f = update["file"];
@@ -101,6 +105,8 @@ namespace TelegramWP10
                     }
                     break;
                 case "messages":
+                    // Fix bug 2: check that the response belongs to the current open chat
+                    if (update["chat_id"] != null && (long)update["chat_id"] != _currentChatId) break;
                     _messageItems.Clear();
                     foreach (var m in update["messages"]) { var item = ParseMessage(m); if (item != null) _messageItems.Insert(0, item); }
                     break;
@@ -121,18 +127,32 @@ namespace TelegramWP10
                     Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
                 };
 
-                // Исправление цитат: проверяем наличие reply_to_message_id
+                // Fix bug 4: in TDLib the reply info is in msg["reply_to"]["message_id"], not msg["reply_to_message_id"]
                 long rId = 0;
-                if (msg["reply_to_message_id"] != null && msg["reply_to_message_id"].Type == JTokenType.Integer) rId = (long)msg["reply_to_message_id"];
-                item.ReplyToText = (rId != 0) ? "Ответ" : null;
+                var replyTo = msg["reply_to"];
+                if (replyTo != null && replyTo["message_id"] != null && replyTo["message_id"].Type == JTokenType.Integer)
+                    rId = (long)replyTo["message_id"];
+                item.ReplyToText = (rId != 0) ? "Ответ на сообщение" : null;
 
                 if (type == "messagePhoto") {
                     var ph = content["photo"]?["sizes"]?.Last?["photo"];
-                    if (ph != null) { _fileToMsgId[(long)ph["id"]] = msgId; _messagesDict[msgId] = item; ProcessFile((long)ph["id"], ph["local"]?["path"]?.ToString(), (bool)ph["local"]["is_completed"]); }
+                    if (ph != null) {
+                        // Fix bug 3: populate dictionaries BEFORE ProcessFile so callbacks can find the message
+                        long phFileId = (long)ph["id"];
+                        _fileToMsgId[phFileId] = msgId;
+                        _messagesDict[msgId] = item;
+                        ProcessFile(phFileId, ph["local"]?["path"]?.ToString(), (bool)ph["local"]["is_completed"]);
+                    }
                 } else if (type == "messageVideo") {
                     item.IsVideo = true;
                     var v = content["video"]?["thumbnail"]?["file"];
-                    if (v != null) { _fileToMsgId[(long)v["id"]] = msgId; _messagesDict[msgId] = item; ProcessFile((long)v["id"], v["local"]?["path"]?.ToString(), (bool)v["local"]["is_completed"]); }
+                    if (v != null) {
+                        // Fix bug 3: same fix for video thumbnails
+                        long vFileId = (long)v["id"];
+                        _fileToMsgId[vFileId] = msgId;
+                        _messagesDict[msgId] = item;
+                        ProcessFile(vFileId, v["local"]?["path"]?.ToString(), (bool)v["local"]["is_completed"]);
+                    }
                 }
 
                 if (string.IsNullOrEmpty(item.Text) && !item.PhotoVisibility.Equals(Visibility.Visible)) item.Text = "[" + type.Replace("message", "") + "]";
