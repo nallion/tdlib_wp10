@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Threading.Tasks;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -27,10 +26,7 @@ namespace TelegramWP10
         {
             this.InitializeComponent();
             Application.Current.UnhandledException += (s, e) => { Log("CRASH: " + e.Message); e.Handled = true; };
-            try {
-                _client = TdJson.td_json_client_create();
-                Log("TDLib Client Created");
-            } catch (Exception ex) { Log("Create Error: " + ex.Message); }
+            _client = TdJson.td_json_client_create();
             ChatListView.ItemsSource = _chatListItems;
             MessagesListView.ItemsSource = _messageItems;
             Task.Run(() => LongPolling());
@@ -47,13 +43,12 @@ namespace TelegramWP10
             string path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
-                ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v30", 
+                ["database_directory"] = path + "/td_db_v40", 
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
                 ["device_model"] = "Lumia",
-                ["application_version"] = "1.1"
+                ["application_version"] = "1.2"
             };
             TdJson.SendUtf8(_client, p.ToString());
         }
@@ -63,6 +58,8 @@ namespace TelegramWP10
                 IntPtr resPtr = TdJson.td_json_client_receive(_client, 1.0);
                 if (resPtr != IntPtr.Zero) {
                     string json = TdJson.IntPtrToStringUtf8(resPtr);
+                    if (string.IsNullOrEmpty(json)) continue; // Исправление ArgumentNull
+
                     var ignored = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                         try {
                             var update = JObject.Parse(json);
@@ -84,14 +81,10 @@ namespace TelegramWP10
                     if (s == "authorizationStateReady") { LoginPanel.Visibility = Visibility.Collapsed; ChatListView.Visibility = Visibility.Visible; TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}"); }
                     break;
                 case "updateNewChat":
-                    var c = update["chat"];
-                    long id = (long)c["id"];
+                    var c = update["chat"]; long id = (long)c["id"];
                     if (!_chatsDict.ContainsKey(id)) _chatsDict[id] = new ChatItem { Id = id, Title = c["title"]?.ToString() };
                     var p = c["photo"]?["small"];
-                    if (p != null) {
-                        _fileToChatId[(long)p["id"]] = id;
-                        ProcessFile((long)p["id"], p["local"]?["path"]?.ToString(), (bool)p["local"]["is_completed"]);
-                    }
+                    if (p != null) { _fileToChatId[(long)p["id"]] = id; ProcessFile((long)p["id"], p["local"]?["path"]?.ToString(), (bool)p["local"]["is_completed"]); }
                     break;
                 case "updateFile":
                     var f = update["file"];
@@ -102,7 +95,10 @@ namespace TelegramWP10
                     }
                     break;
                 case "chats":
-                    foreach (var cId in update["chat_ids"]) if (_chatsDict.ContainsKey((long)cId) && !_chatListItems.Contains(_chatsDict[(long)cId])) _chatListItems.Add(_chatsDict[(long)cId]);
+                    foreach (var cId in update["chat_ids"]) {
+                        long cid = (long)cId;
+                        if (_chatsDict.ContainsKey(cid) && !_chatListItems.Contains(_chatsDict[cid])) _chatListItems.Add(_chatsDict[cid]);
+                    }
                     break;
                 case "messages":
                     _messageItems.Clear();
@@ -125,8 +121,10 @@ namespace TelegramWP10
                     Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
                 };
 
-                long rId = msg["reply_to_message_id"]?.Value<long>() ?? 0;
-                item.ReplyToText = rId != 0 ? "Цитата" : null;
+                // Исправление цитат: проверяем наличие reply_to_message_id
+                long rId = 0;
+                if (msg["reply_to_message_id"] != null && msg["reply_to_message_id"].Type == JTokenType.Integer) rId = (long)msg["reply_to_message_id"];
+                item.ReplyToText = (rId != 0) ? "Ответ" : null;
 
                 if (type == "messagePhoto") {
                     var ph = content["photo"]?["sizes"]?.Last?["photo"];
@@ -136,12 +134,14 @@ namespace TelegramWP10
                     var v = content["video"]?["thumbnail"]?["file"];
                     if (v != null) { _fileToMsgId[(long)v["id"]] = msgId; _messagesDict[msgId] = item; ProcessFile((long)v["id"], v["local"]?["path"]?.ToString(), (bool)v["local"]["is_completed"]); }
                 }
+
+                if (string.IsNullOrEmpty(item.Text) && !item.PhotoVisibility.Equals(Visibility.Visible)) item.Text = "[" + type.Replace("message", "") + "]";
                 return item;
             } catch { return null; }
         }
 
         private void ProcessFile(long fId, string path, bool ready) {
-            if (ready) {
+            if (ready && !string.IsNullOrEmpty(path)) {
                 if (_fileToChatId.ContainsKey(fId)) { var t = UpdateAvatar(_fileToChatId[fId], path); }
                 if (_fileToMsgId.ContainsKey(fId)) { var t = UpdateMessagePhoto(_fileToMsgId[fId], path); }
             } else TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":10}");
@@ -150,21 +150,26 @@ namespace TelegramWP10
         private async Task UpdateAvatar(long chatId, string path) {
             try {
                 var bitmap = new BitmapImage();
-                using (var s = await (await StorageFile.GetFileFromPathAsync(path)).OpenReadAsync()) {
+                var file = await StorageFile.GetFileFromPathAsync(path);
+                using (var s = await file.OpenReadAsync()) {
                     await bitmap.SetSourceAsync(s);
                     if (_chatsDict.ContainsKey(chatId)) _chatsDict[chatId].Photo = bitmap;
                 }
-            } catch (Exception ex) { Log("Ava Error: " + ex.Message); }
+            } catch { }
         }
 
         private async Task UpdateMessagePhoto(long msgId, string path) {
             try {
                 var bitmap = new BitmapImage();
-                using (var s = await (await StorageFile.GetFileFromPathAsync(path)).OpenReadAsync()) {
+                var file = await StorageFile.GetFileFromPathAsync(path);
+                using (var s = await file.OpenReadAsync()) {
                     await bitmap.SetSourceAsync(s);
-                    if (_messagesDict.ContainsKey(msgId)) { _messagesDict[msgId].AttachedPhoto = bitmap; _messagesDict[msgId].OnPropertyChanged("PhotoVisibility"); }
+                    if (_messagesDict.ContainsKey(msgId)) {
+                        _messagesDict[msgId].AttachedPhoto = bitmap;
+                        _messagesDict[msgId].OnPropertyChanged("PhotoVisibility");
+                    }
                 }
-            } catch (Exception ex) { Log("Photo Error: " + ex.Message); }
+            } catch { }
         }
 
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
@@ -175,8 +180,16 @@ namespace TelegramWP10
 
         private void SendMessage_Click(object sender, RoutedEventArgs e) {
             if (string.IsNullOrWhiteSpace(MessageInput.Text)) return;
-            JObject req = new JObject { ["@type"] = "sendMessage", ["chat_id"] = _currentChatId, ["input_message_content"] = new JObject { ["@type"] = "inputMessageText", ["text"] = new JObject { ["@type"] = "formattedText", ["text"] = MessageInput.Text } } };
-            TdJson.SendUtf8(_client, req.ToString()); MessageInput.Text = "";
+            JObject req = new JObject {
+                ["@type"] = "sendMessage",
+                ["chat_id"] = _currentChatId,
+                ["input_message_content"] = new JObject {
+                    ["@type"] = "inputMessageText",
+                    ["text"] = new JObject { ["@type"] = "formattedText", ["text"] = MessageInput.Text }
+                }
+            };
+            TdJson.SendUtf8(_client, req.ToString());
+            MessageInput.Text = "";
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) { _currentChatId = 0; MessagesPanel.Visibility = Visibility.Collapsed; StartPanel.Visibility = Visibility.Visible; }

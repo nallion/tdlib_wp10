@@ -17,6 +17,8 @@ namespace TelegramWP10
 
         public static void SendUtf8(IntPtr client, string request)
         {
+            if (string.IsNullOrEmpty(request)) return;
+            // Кодируем в UTF-8 с нулевым терминатором для C++
             byte[] bytes = Encoding.UTF8.GetBytes(request + "\0");
             IntPtr ptr = Marshal.AllocHGlobal(bytes.Length);
             try {
@@ -32,6 +34,7 @@ namespace TelegramWP10
             if (ptr == IntPtr.Zero) return null;
             int len = 0;
             while (Marshal.ReadByte(ptr, len) != 0) len++;
+            if (len == 0) return string.Empty;
             byte[] buffer = new byte[len];
             Marshal.Copy(ptr, buffer, 0, len);
             return Encoding.UTF8.GetString(buffer);
