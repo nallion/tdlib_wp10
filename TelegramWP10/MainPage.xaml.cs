@@ -33,113 +33,168 @@ namespace TelegramWP10
             SendParameters();
         }
 
-        private void Log(string m) { var t = Run(() => DebugConsole.Text += "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + m + "\n"); }
-        private async Task Run(Action a) { await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => a()); }
+        private void Log(string m) {
+            var ignored = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => {
+                DebugConsole.Text = $"[{DateTime.Now:HH:mm:ss}] {m}\n" + DebugConsole.Text;
+            });
+        }
 
-        private void SendParameters()
-        {
-            JObject req = new JObject
-            {
+        private void SendParameters() {
+            string path = ApplicationData.Current.LocalFolder.Path.Replace("\\", "/");
+            JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
-                ["parameters"] = new JObject
-                {
-                    ["use_test_dc"] = true, // ВКЛЮЧЕНО: Тестовые датацентры Telegram
-                    ["use_file_database"] = true,
-                    ["use_chat_info_database"] = true,
-                    ["use_message_database"] = true,
-                    ["use_secret_chats"] = false,
-                    ["api_id"] = 2390141, 
-                    ["api_hash"] = "9f27092921966d48f7605d8f28f00155",
-                    ["system_language_code"] = "ru",
-                    ["device_model"] = "Lumia",
-                    ["system_version"] = "Windows 10 Mobile",
-                    ["application_version"] = "1.0",
-                    ["database_directory"] = ApplicationData.Current.LocalFolder.Path + "\\tdlib_test", // Изменено на test для изоляции
-                    ["files_directory"] = ApplicationData.Current.LocalFolder.Path + "\\tdlib_files_test"
-                }
+                ["database_directory"] = path + "/td_db_v40", 
+                ["api_id"] = 26688287,
+                ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
+                ["system_language_code"] = "ru",
+                ["device_model"] = "Lumia",
+                ["application_version"] = "1.2"
             };
-            TdJson.SendUtf8(_client, req.ToString());
-            TdJson.SendUtf8(_client, "{\"@type\":\"checkDatabaseEncryptionKey\",\"encryption_key\":\"\"}");
+            TdJson.SendUtf8(_client, p.ToString());
         }
 
-        private async void LongPolling()
-        {
-            while (true)
-            {
-                IntPtr res = TdJson.td_json_client_receive(_client, 10.0);
-                if (res == IntPtr.Zero) continue;
-                string s = TdJson.PtrToUtf8String(res);
-                await Run(() => HandleUpdate(s));
+        private void LongPolling() {
+            while (true) {
+                IntPtr resPtr = TdJson.td_json_client_receive(_client, 1.0);
+                if (resPtr != IntPtr.Zero) {
+                    string json = TdJson.IntPtrToStringUtf8(resPtr);
+                    if (string.IsNullOrEmpty(json)) continue; // Исправление ArgumentNull
+
+                    var ignored = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                        try {
+                            var update = JObject.Parse(json);
+                            string type = update["@type"]?.ToString();
+                            if (type == "error") Log("TG ERR: " + json);
+                            HandleUpdate(type, update);
+                        } catch (Exception ex) { Log("JSON ERR: " + ex.Message); }
+                    });
+                }
+            }
+        }
+
+        private void HandleUpdate(string type, JObject update) {
+            switch (type) {
+                case "updateAuthorizationState":
+                    var s = update["authorization_state"]?["@type"]?.ToString();
+                    if (s == "authorizationStateWaitPhoneNumber") LoginPanel.Visibility = Visibility.Visible;
+                    if (s == "authorizationStateWaitCode") { CodeInput.Visibility = Visibility.Visible; CodeButton.Visibility = Visibility.Visible; }
+                    if (s == "authorizationStateReady") { LoginPanel.Visibility = Visibility.Collapsed; ChatListView.Visibility = Visibility.Visible; TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}"); }
+                    break;
+                case "updateNewChat":
+                    var c = update["chat"]; long id = (long)c["id"];
+                    if (!_chatsDict.ContainsKey(id)) _chatsDict[id] = new ChatItem { Id = id, Title = c["title"]?.ToString() };
+                    var p = c["photo"]?["small"];
+                    if (p != null) {
+                        // Fix bug 1: register file mapping BEFORE processing so UpdateAvatar can find the chat
+                        _fileToChatId[(long)p["id"]] = id;
+                        ProcessFile((long)p["id"], p["local"]?["path"]?.ToString(), (bool)p["local"]["is_completed"]);
+                    }
+                    break;
+                case "updateFile":
+                    var f = update["file"];
+                    if (f != null && (bool)f["local"]["is_completed"]) {
+                        long fid = (long)f["id"]; string path = f["local"]["path"]?.ToString();
+                        if (_fileToChatId.ContainsKey(fid)) { var t = UpdateAvatar(_fileToChatId[fid], path); }
+                        if (_fileToMsgId.ContainsKey(fid)) { var t = UpdateMessagePhoto(_fileToMsgId[fid], path); }
+                    }
+                    break;
+                case "chats":
+                    foreach (var cId in update["chat_ids"]) {
+                        long cid = (long)cId;
+                        if (_chatsDict.ContainsKey(cid) && !_chatListItems.Contains(_chatsDict[cid])) _chatListItems.Add(_chatsDict[cid]);
+                    }
+                    break;
+                case "messages":
+                    // Fix bug 2: check that the response belongs to the current open chat
+                    if (update["chat_id"] != null && (long)update["chat_id"] != _currentChatId) break;
+                    _messageItems.Clear();
+                    foreach (var m in update["messages"]) { var item = ParseMessage(m); if (item != null) _messageItems.Insert(0, item); }
+                    break;
             }
         }
 
-        private void HandleUpdate(string json)
-        {
-            try
-            {
-                JObject u = JObject.Parse(json);
-                string type = (string)u["@type"];
+        private MessageItem ParseMessage(JToken msg) {
+            try {
+                long msgId = (long)msg["id"];
+                var content = msg["content"];
+                string type = content["@type"]?.ToString();
+                string txt = type == "messageText" ? content["text"]?["text"]?.ToString() : content["caption"]?["text"]?.ToString() ?? "";
+                
+                var item = new MessageItem {
+                    Id = msgId, Text = txt,
+                    Date = DateTimeOffset.FromUnixTimeSeconds((long)msg["date"]).LocalDateTime.ToString("HH:mm"),
+                    Alignment = (bool)msg["is_outgoing"] ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                    Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
+                };
 
-                if (type == "updateAuthorizationState")
-                {
-                    string state = (string)u["authorization_state"]["@type"];
-                    Log("AUTH: " + state);
-                    AuthPanel.Visibility = (state == "authorizationStateWaitPhoneNumber" || state == "authorizationStateWaitCode") ? Visibility.Visible : Visibility.Collapsed;
-                    PhoneInput.Visibility = (state == "authorizationStateWaitPhoneNumber") ? Visibility.Visible : Visibility.Collapsed;
-                    CodeInput.Visibility = (state == "authorizationStateWaitCode") ? Visibility.Visible : Visibility.Collapsed;
-                }
-                else if (type == "updateNewChat")
-                {
-                    var c = u["chat"];
-                    long id = (long)c["id"];
-                    var item = new ChatItem { Id = id, Title = (string)c["title"] };
-                    _chatsDict[id] = item;
-                    _chatListItems.Add(item);
-                }
-                else if (type == "updateNewMessage")
-                {
-                    var m = u["message"];
-                    long chatId = (long)m["chat_id"];
-                    if (chatId == _currentChatId)
-                    {
-                        var msg = new MessageItem { Text = GetMsgText(m) };
-                        _messageItems.Add(msg);
+                // Fix bug 4: in TDLib the reply info is in msg["reply_to"]["message_id"], not msg["reply_to_message_id"]
+                long rId = 0;
+                var replyTo = msg["reply_to"];
+                if (replyTo != null && replyTo["message_id"] != null && replyTo["message_id"].Type == JTokenType.Integer)
+                    rId = (long)replyTo["message_id"];
+                item.ReplyToText = (rId != 0) ? "Ответ на сообщение" : null;
+
+                if (type == "messagePhoto") {
+                    var ph = content["photo"]?["sizes"]?.Last?["photo"];
+                    if (ph != null) {
+                        // Fix bug 3: populate dictionaries BEFORE ProcessFile so callbacks can find the message
+                        long phFileId = (long)ph["id"];
+                        _fileToMsgId[phFileId] = msgId;
+                        _messagesDict[msgId] = item;
+                        ProcessFile(phFileId, ph["local"]?["path"]?.ToString(), (bool)ph["local"]["is_completed"]);
+                    }
+                } else if (type == "messageVideo") {
+                    item.IsVideo = true;
+                    var v = content["video"]?["thumbnail"]?["file"];
+                    if (v != null) {
+                        // Fix bug 3: same fix for video thumbnails
+                        long vFileId = (long)v["id"];
+                        _fileToMsgId[vFileId] = msgId;
+                        _messagesDict[msgId] = item;
+                        ProcessFile(vFileId, v["local"]?["path"]?.ToString(), (bool)v["local"]["is_completed"]);
                     }
                 }
-                else if (type == "updateFile")
-                {
-                    var f = u["file"];
-                    if ((bool)f["local"]["is_downloading_completed"])
-                    {
-                        long fid = (long)f["id"];
-                        if (_fileToChatId.ContainsKey(fid))
-                        {
-                            long cid = _fileToChatId[fid];
-                            _chatsDict[cid].Photo = new BitmapImage(new Uri((string)f["local"]["path"]));
-                        }
+
+                if (string.IsNullOrEmpty(item.Text) && !item.PhotoVisibility.Equals(Visibility.Visible)) item.Text = "[" + type.Replace("message", "") + "]";
+                return item;
+            } catch { return null; }
+        }
+
+        private void ProcessFile(long fId, string path, bool ready) {
+            if (ready && !string.IsNullOrEmpty(path)) {
+                if (_fileToChatId.ContainsKey(fId)) { var t = UpdateAvatar(_fileToChatId[fId], path); }
+                if (_fileToMsgId.ContainsKey(fId)) { var t = UpdateMessagePhoto(_fileToMsgId[fId], path); }
+            } else TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":10}");
+        }
+
+        private async Task UpdateAvatar(long chatId, string path) {
+            try {
+                var bitmap = new BitmapImage();
+                var file = await StorageFile.GetFileFromPathAsync(path);
+                using (var s = await file.OpenReadAsync()) {
+                    await bitmap.SetSourceAsync(s);
+                    if (_chatsDict.ContainsKey(chatId)) _chatsDict[chatId].Photo = bitmap;
+                }
+            } catch { }
+        }
+
+        private async Task UpdateMessagePhoto(long msgId, string path) {
+            try {
+                var bitmap = new BitmapImage();
+                var file = await StorageFile.GetFileFromPathAsync(path);
+                using (var s = await file.OpenReadAsync()) {
+                    await bitmap.SetSourceAsync(s);
+                    if (_messagesDict.ContainsKey(msgId)) {
+                        _messagesDict[msgId].AttachedPhoto = bitmap;
+                        _messagesDict[msgId].OnPropertyChanged("PhotoVisibility");
                     }
                 }
-            }
-            catch (Exception ex) { Log("ERR: " + ex.Message); }
+            } catch { }
         }
 
-        private string GetMsgText(JToken m)
-        {
-            var c = m["content"];
-            string type = (string)c["@type"];
-            if (type == "messageText") return (string)c["text"]["text"];
-            if (type == "messagePhoto") return "[Фото]";
-            return "[" + type + "]";
-        }
-
-        private void Chat_Click(object sender, ItemClickEventArgs e)
-        {
-            var item = (ChatItem)e.ClickedItem;
-            _currentChatId = item.Id;
-            _messageItems.Clear();
-            StartPanel.Visibility = Visibility.Collapsed;
-            MessagesPanel.Visibility = Visibility.Visible;
-            ChatTitle.Text = item.Title;
+        private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
+            var chat = (ChatItem)e.ClickedItem; _currentChatId = chat.Id; CurrentChatTitle.Text = chat.Title;
+            _messageItems.Clear(); _messagesDict.Clear(); StartPanel.Visibility = Visibility.Collapsed; MessagesPanel.Visibility = Visibility.Visible;
             TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
         }
 
