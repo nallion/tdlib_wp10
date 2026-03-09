@@ -49,6 +49,7 @@
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="ChatItem.cs" />
+    <Compile Include="MessageItem.cs" />
   </ItemGroup>
 
   <ItemGroup>
