@@ -1,9 +1,48 @@
-<Page x:Class="TelegramWP10.MainPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <StackPanel VerticalAlignment="Center" Padding="20">
-            <TextBox x:Name="PhoneInput" Header="Phone Number" PlaceholderText="+7..." InputScope="TelephoneNumber"/>
-            <Button Content="Send SMS Code" Click="SendCode_Click" HorizontalAlignment="Stretch" Margin="0,10,0,0"/>
-            <TextBlock x:Name="StatusText" Margin="0,10" Text="Status: Ready" TextWrapping="Wrap"/>
+<Page
+    x:Class="TelegramWP10.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TelegramWP10"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid>
+        <StackPanel Padding="20">
+            <TextBlock x:Name="StatusText" Text="Подключение..." Margin="0,0,0,10" Foreground="Gray" TextWrapping="Wrap"/>
+
+            <StackPanel x:Name="LoginPanel" Visibility="Visible">
+                <TextBox x:Name="PhoneInput" Header="Номер телефона" PlaceholderText="+7..." InputScope="TelephoneNumber"/>
+                <Button Content="Отправить номер" Click="SendPhone_Click" HorizontalAlignment="Stretch" Margin="0,10"/>
+                
+                <TextBox x:Name="CodeInput" Header="Код подтверждения" Visibility="Collapsed" Margin="0,10"/>
+                <Button x:Name="CodeButton" Content="Войти" Click="SendCode_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
+            </StackPanel>
+
+            <ListView x:Name="ChatListView" Height="600" Visibility="Collapsed">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="local:ChatItem">
+                        <Grid Margin="0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Ellipse Width="50" Height="50">
+                                <Ellipse.Fill>
+                                    <ImageBrush ImageSource="{Binding PhotoPath}"/>
+                                </Ellipse.Fill>
+                            </Ellipse>
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="15,0,0,0">
+                                <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="Сообщений пока нет" FontSize="14" Foreground="Gray"/>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
         </StackPanel>
     </Grid>
 </Page>
