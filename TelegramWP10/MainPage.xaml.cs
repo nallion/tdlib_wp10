@@ -166,13 +166,14 @@ namespace TelegramWP10
                     break;
 
                 case "updateFile":
-                    var f = update["file"];
+                case "file":
+                    var f = update["file"] ?? update; // "updateFile" содержит file внутри, "file" — сам и есть файл
                     if (f != null) {
-                        long fid = (long)f["id"];
                         bool isCompleted = f["local"]?["is_completed"]?.ToObject<bool>() ?? false;
                         string fpath = f["local"]?["path"]?.ToString();
-                        Log("updateFile id=" + fid + " completed=" + isCompleted + " path=" + fpath);
-                        if (isCompleted) {
+                        long fid = f["id"] != null ? (long)f["id"] : 0;
+                        Log("FILE id=" + fid + " completed=" + isCompleted + " path=" + fpath);
+                        if (isCompleted && fid != 0) {
                             if (_fileToChatId.ContainsKey(fid)) { Log("→ UpdateAvatar chat=" + _fileToChatId[fid]); var t = UpdateAvatar(_fileToChatId[fid], fpath); }
                             if (_fileToMsgId.ContainsKey(fid)) { Log("→ UpdateMsgPhoto msg=" + _fileToMsgId[fid]); var t = UpdateMessagePhoto(_fileToMsgId[fid], fpath); }
                         }
@@ -189,10 +190,11 @@ namespace TelegramWP10
                     break;
 
                 case "messages":
-                    long msgChatId = update["chat_id"]?.ToObject<long>() ?? _currentChatId;
+                    long msgChatId = update["chat_id"]?.ToObject<long>() ?? 0;
                     var msgs = update["messages"] as JArray;
                     Log("messages chat_id=" + msgChatId + " current=" + _currentChatId + " count=" + msgs?.Count);
-                    if (msgChatId != _currentChatId) { Log("SKIP messages — wrong chat"); break; }
+                    // chat_id=0 означает что это ответ на getChatHistory (не updateNewMessage)
+                    if (msgChatId != 0 && msgChatId != _currentChatId) { Log("SKIP — wrong chat"); break; }
                     _messageItems.Clear();
                     if (msgs != null) {
                         for (int i = msgs.Count - 1; i >= 0; i--) {
@@ -200,7 +202,7 @@ namespace TelegramWP10
                             if (item != null) _messageItems.Add(item);
                         }
                     }
-                    Log("messages rendered: " + _messageItems.Count);
+                    Log("rendered " + _messageItems.Count + " messages");
                     break;
             }
         }
@@ -301,7 +303,11 @@ namespace TelegramWP10
             } catch (Exception ex) { Log("UpdateMsgPhoto ERR msg=" + msgId + " | " + ex.Message); }
         }
 
+        private bool _isOpeningChat = false;
+
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
+            if (_isOpeningChat) return;
+            _isOpeningChat = true;
             var chat = (ChatItem)e.ClickedItem;
             _currentChatId = chat.Id;
             CurrentChatTitle.Text = chat.Title;
@@ -312,6 +318,7 @@ namespace TelegramWP10
             MessagesPanel.Visibility = Visibility.Visible;
             Log("OPEN CHAT id=" + _currentChatId + " title=" + chat.Title);
             TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
+            _isOpeningChat = false;
         }
 
         private void SendMessage_Click(object sender, RoutedEventArgs e) {
