@@ -46,6 +46,7 @@
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="TdJsonClient.cs">
+    </Compile>
     <Compile Include="ChatItem.cs" />
     </Compile>
   </ItemGroup>
