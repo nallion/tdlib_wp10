@@ -18,8 +18,6 @@ namespace TelegramWP10
         private ObservableCollection<ChatItem> _chatListItems = new ObservableCollection<ChatItem>();
         private ObservableCollection<MessageItem> _messageItems = new ObservableCollection<MessageItem>();
         private Dictionary<long, ChatItem> _chatsDict = new Dictionary<long, ChatItem>();
-        
-        // Исправлено: Словарь на long ID
         private Dictionary<long, long> _fileToChatId = new Dictionary<long, long>();
         private long _currentChatId = 0;
 
@@ -39,8 +37,8 @@ namespace TelegramWP10
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v13", // Новая версия для чистого теста
-                ["files_directory"] = path + "/td_files_v13",
+                ["database_directory"] = path + "/td_db_v15", 
+                ["files_directory"] = path + "/td_files_v15",
                 ["api_id"] = 26688287,
                 ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b",
                 ["system_language_code"] = "ru",
@@ -71,11 +69,6 @@ namespace TelegramWP10
 
         private void HandleUpdate(string type, JObject update)
         {
-            if (type == "error") {
-                DebugText.Text = "TDLib Error: " + update["message"];
-                return;
-            }
-
             switch (type)
             {
                 case "updateAuthorizationState":
@@ -85,7 +78,6 @@ namespace TelegramWP10
                     if (state == "authorizationStateReady") {
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
-                        StatusText.Text = "Статус: Онлайн";
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":30}");
                     }
                     break;
@@ -96,16 +88,14 @@ namespace TelegramWP10
                     if (!_chatsDict.ContainsKey(id)) {
                         var chatItem = new ChatItem { Id = id, Title = c["title"]?.ToString() };
                         _chatsDict[id] = chatItem;
-                        
                         var photo = c["photo"]?["small"];
                         if (photo != null) {
-                            long fId = (long)photo["id"]; // Каст в long
+                            long fId = (long)photo["id"];
                             _fileToChatId[fId] = id;
                             string lp = photo["local"]?["path"]?.ToString();
                             if (!string.IsNullOrEmpty(lp) && (bool)photo["local"]["is_completed"]) {
-                                var ignored = UpdateAvatar(id, lp);
+                                var t = UpdateAvatar(id, lp);
                             } else {
-                                // Приоритет 5 для аватарок
                                 TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":5}");
                             }
                         }
@@ -117,7 +107,7 @@ namespace TelegramWP10
                     if (f != null && (bool)f["local"]["is_completed"]) {
                         long fid = (long)f["id"];
                         if (_fileToChatId.ContainsKey(fid)) {
-                            var ignored = UpdateAvatar(_fileToChatId[fid], f["local"]["path"]?.ToString());
+                            var t = UpdateAvatar(_fileToChatId[fid], f["local"]["path"]?.ToString());
                         }
                     }
                     break;
@@ -132,15 +122,19 @@ namespace TelegramWP10
                     }
                     break;
 
+                // ФИКС ИСТОРИИ: когда приходят сообщения списком
                 case "messages": 
                     var msgs = update["messages"];
-                    if (msgs != null) {
-                        _messageItems.Clear();
-                        foreach (var m in msgs) {
-                            var parsed = ParseMessage(m);
-                            if (parsed != null) _messageItems.Insert(0, parsed);
+                    if (msgs != null && msgs.HasValues) {
+                        // Проверяем, принадлежат ли сообщения текущему открытому чату
+                        if ((long)msgs[0]["chat_id"] == _currentChatId) {
+                            _messageItems.Clear();
+                            foreach (var m in msgs) {
+                                var parsed = ParseMessage(m);
+                                if (parsed != null) _messageItems.Insert(0, parsed);
+                            }
+                            if (_messageItems.Count > 0) MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
                         }
-                        if (_messageItems.Count > 0) MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
                     }
                     break;
 
@@ -157,17 +151,26 @@ namespace TelegramWP10
             }
         }
 
-        // Прямая загрузка через StorageFile
         private async Task UpdateAvatar(long chatId, string path) {
             if (string.IsNullOrEmpty(path)) return;
-            try {
-                var file = await StorageFile.GetFileFromPathAsync(path);
-                using (var stream = await file.OpenReadAsync()) {
-                    var bitmap = new BitmapImage();
-                    await bitmap.SetSourceAsync(stream);
-                    _chatsDict[chatId].Photo = bitmap; // Это вызовет PropertyChanged
+            
+            // Даем системе время закрыть дескриптор файла после скачивания
+            await Task.Delay(500); 
+
+            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, async () => {
+                try {
+                    StorageFile file = await StorageFile.GetFileFromPathAsync(path);
+                    using (var stream = await file.OpenReadAsync()) {
+                        BitmapImage bitmap = new BitmapImage();
+                        await bitmap.SetSourceAsync(stream);
+                        if (_chatsDict.ContainsKey(chatId)) {
+                            _chatsDict[chatId].Photo = bitmap;
+                        }
+                    }
+                } catch (Exception ex) {
+                    DebugText.Text = "Avatar Error: " + ex.Message;
                 }
-            } catch { }
+            });
         }
 
         private MessageItem ParseMessage(JToken msg)
@@ -176,7 +179,6 @@ namespace TelegramWP10
                 string txt = msg["content"]?["text"]?["text"]?.ToString() ?? "[Вложение]";
                 long unixTime = (long)msg["date"];
                 DateTime dt = DateTimeOffset.FromUnixTimeSeconds(unixTime).LocalDateTime;
-
                 return new MessageItem {
                     Id = (long)msg["id"],
                     Text = txt,
@@ -192,10 +194,12 @@ namespace TelegramWP10
             var chat = (ChatItem)e.ClickedItem;
             _currentChatId = chat.Id;
             CurrentChatTitle.Text = chat.Title;
+            _messageItems.Clear(); // Чистим старое сразу
             StartPanel.Visibility = Visibility.Collapsed;
             MessagesPanel.Visibility = Visibility.Visible;
-            _messageItems.Clear();
-            TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":40,\"only_local\":false}");
+            
+            // Запрашиваем историю. Ответ придет в кейс "messages" или "updateNewMessage"
+            TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50,\"only_local\":false}");
         }
 
         private void SendMessage_Click(object sender, RoutedEventArgs e)
@@ -224,26 +228,5 @@ namespace TelegramWP10
 
         private void SendCode_Click(object sender, RoutedEventArgs e) =>
             TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
-    }
-
-    public static class TdJson {
-        [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern IntPtr td_json_client_create();
-        [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void td_json_client_send(IntPtr client, byte[] request);
-        [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern IntPtr td_json_client_receive(IntPtr client, double timeout);
-        public static void SendUtf8(IntPtr client, string json) {
-            byte[] utf8Bytes = Encoding.UTF8.GetBytes(json + "\0");
-            td_json_client_send(client, utf8Bytes);
-        }
-        public static string IntPtrToStringUtf8(IntPtr ptr) {
-            if (ptr == IntPtr.Zero) return null;
-            int len = 0;
-            while (Marshal.ReadByte(ptr, len) != 0) len++;
-            byte[] buffer = new byte[len];
-            Marshal.Copy(ptr, buffer, 0, len);
-            return Encoding.UTF8.GetString(buffer);
-        }
     }
 }
