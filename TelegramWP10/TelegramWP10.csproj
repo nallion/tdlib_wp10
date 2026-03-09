@@ -17,7 +17,6 @@
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5E7574B-450C-4C53-8BD3-B73C464AFCE0};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
-    
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
     <AppxBundle>Never</AppxBundle>
@@ -37,12 +36,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
-      <Version>6.2.14</Version>
-    </PackageReference>
-    <PackageReference Include="Newtonsoft.Json">
-      <Version>13.0.1</Version>
-    </PackageReference>
+    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform"><Version>6.2.14</Version></PackageReference>
+    <PackageReference Include="Newtonsoft.Json"><Version>13.0.1</Version></PackageReference>
   </ItemGroup>
 
   <ItemGroup>
@@ -78,31 +73,23 @@
     <PropertyGroup>
       <CertFile>$(ProjectDir)MyTempCert.pfx</CertFile>
       <CertPass>12345</CertPass>
-      
-      <WSDKBin Condition="'$(WindowsSdkDir)' != ''">$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x86\</WSDKBin>
-      <WSDKBin Condition="'$(WSDKBin)' == ''">C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\</WSDKBin>
-      
-      <SignToolCmd>"$(WSDKBin)signtool.exe"</SignToolCmd>
-      <MakeCertCmd>"$(WSDKBin)makecert.exe"</MakeCertCmd>
-      <Pvk2PfxCmd>"$(WSDKBin)pvk2pfx.exe"</Pvk2PfxCmd>
-      
       <SearchDir>C:\projects\tdlib-wp10\AppPackages</SearchDir>
+      
+      <SDKBin Condition="Exists('$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x86\')">$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x86\</SDKBin>
+      <SDKBin Condition="'$(SDKBin)' == '' And Exists('$(WindowsSdkDir)bin\10.0.19041.0\x86\')">$(WindowsSdkDir)bin\10.0.19041.0\x86\</SDKBin>
+      <SDKBin Condition="'$(SDKBin)' == ''">C:\Program Files (x86)\Windows Kits\10\bin\x86\</SDKBin>
     </PropertyGroup>
 
-    <ItemGroup>
-      <AppxToSign Include="$(SearchDir)\**\*.appx" />
-    </ItemGroup>
+    <ItemGroup><AppxToSign Include="$(SearchDir)\**\*.appx" /></ItemGroup>
 
-    <Message Importance="High" Text="--- ПРОВЕРКА ИНСТРУМЕНТОВ В: $(WSDKBin) ---" />
+    <Message Importance="High" Text="--- ПОДПИСЬ ПАКЕТОВ (Инструменты: $(SDKBin)) ---" />
 
-    <Exec Condition="!Exists('$(CertFile)') And Exists('$(WSDKBin)makecert.exe')" 
-          Command="$(MakeCertCmd) -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)TempCert.cer&quot; &amp;&amp; $(Pvk2PfxCmd) -pvk &quot;$(ProjectDir)TempCert.pvk&quot; -spc &quot;$(ProjectDir)TempCert.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" />
+    <Exec Condition="!Exists('$(CertFile)')" 
+          Command="&quot;$(SDKBin)makecert.exe&quot; -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)TempCert.cer&quot; &amp;&amp; &quot;$(SDKBin)pvk2pfx.exe&quot; -pvk &quot;$(ProjectDir)TempCert.pvk&quot; -spc &quot;$(ProjectDir)TempCert.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" />
 
-    <Message Importance="High" Text="Найдены пакеты для подписи: @(AppxToSign)" Condition="'@(AppxToSign)' != ''" />
+    <Exec Condition="'@(AppxToSign)' != ''"
+          Command="&quot;$(SDKBin)signtool.exe&quot; sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(AppxToSign.FullPath)&quot;" />
     
-    <Exec Condition="'@(AppxToSign)' != '' And Exists('$(WSDKBin)signtool.exe')"
-          Command="$(SignToolCmd) sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(AppxToSign.FullPath)&quot;" />
-    
-    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА ---" />
+    <Message Importance="High" Text="--- ГОТОВО. ПОДПИСАНО: @(AppxToSign->Count()) ---" />
   </Target>
 </Project>
