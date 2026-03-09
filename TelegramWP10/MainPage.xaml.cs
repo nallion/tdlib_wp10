@@ -17,6 +17,10 @@ namespace TelegramWP10
         private ObservableCollection<ChatItem> _chatListItems = new ObservableCollection<ChatItem>();
         private ObservableCollection<MessageItem> _messageItems = new ObservableCollection<MessageItem>();
         private Dictionary<long, ChatItem> _chatsDict = new Dictionary<long, ChatItem>();
+        
+        // ВОЗВРАЩЕНО: Словарь для связи ID скачанного файла и ID чата
+        private Dictionary<int, long> _fileToChatId = new Dictionary<int, long>();
+        
         private long _currentChatId = 0;
 
         public MainPage()
@@ -35,10 +39,10 @@ namespace TelegramWP10
             JObject p = new JObject {
                 ["@type"] = "setTdlibParameters",
                 ["use_test_dc"] = false,
-                ["database_directory"] = path + "/td_db_v7",
-                ["files_directory"] = path + "/td_files_v7",
-                ["api_id"] = 26688287, // ЗАМЕНИ НА СВОЙ
-                ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b", // ЗАМЕНИ НА СВОЙ
+                ["database_directory"] = path + "/td_db_v8", // Новая папка, чтобы чаты скачались заново с картинками
+                ["files_directory"] = path + "/td_files_v8",
+                ["api_id"] = 26688287, // ЗАМЕНИ НА СВОЙ API_ID
+                ["api_hash"] = "5f4afe72bc71dc6ec40f7dcb0c9a822b", // ЗАМЕНИ НА СВОЙ API_HASH
                 ["system_language_code"] = "ru",
                 ["device_model"] = "Lumia UWP",
                 ["application_version"] = "1.0"
@@ -88,9 +92,27 @@ namespace TelegramWP10
                     break;
 
                 case "updateNewChat":
-                    long id = (long)update["chat"]["id"];
+                    var c = update["chat"];
+                    if (c == null) return;
+                    long id = (long)c["id"];
                     if (!_chatsDict.ContainsKey(id)) {
-                        _chatsDict[id] = new ChatItem { Id = id, Title = update["chat"]["title"]?.ToString() };
+                        _chatsDict[id] = new ChatItem { Id = id, Title = c["title"]?.ToString() };
+                        
+                        // ВОЗВРАЩЕНО: Запрос на скачивание аватарки
+                        var photo = c["photo"]?["small"];
+                        if (photo != null) {
+                            int fId = (int)photo["id"];
+                            _fileToChatId[fId] = id;
+                            string lp = photo["local"]?["path"]?.ToString();
+                            
+                            // Если фото уже скачано ранее - ставим сразу
+                            if (!string.IsNullOrEmpty(lp)) {
+                                _chatsDict[id].Photo = new BitmapImage(new Uri(lp));
+                            } else {
+                                // Иначе отправляем запрос на скачивание
+                                TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + fId + ",\"priority\":1}");
+                            }
+                        }
                     }
                     break;
 
@@ -100,6 +122,24 @@ namespace TelegramWP10
                         foreach (var cId in ids) {
                             if (_chatsDict.ContainsKey((long)cId) && !_chatListItems.Contains(_chatsDict[(long)cId]))
                                 _chatListItems.Add(_chatsDict[(long)cId]);
+                        }
+                    }
+                    break;
+
+                // ВОЗВРАЩЕНО: Обработчик скачанных файлов
+                case "updateFile":
+                    var f = update["file"];
+                    if (f != null && f["local"]?["is_completed"]?.Value<bool>() == true) {
+                        int fid = (int)f["id"];
+                        if (_fileToChatId.ContainsKey(fid)) {
+                            long cId = _fileToChatId[fid];
+                            if (_chatsDict.ContainsKey(cId)) {
+                                string lp = f["local"]["path"]?.ToString();
+                                if (!string.IsNullOrEmpty(lp)) {
+                                    // Обновляем картинку. INotifyPropertyChanged сам скажет интерфейсу перерисоваться.
+                                    _chatsDict[cId].Photo = new BitmapImage(new Uri(lp));
+                                }
+                            }
                         }
                     }
                     break;
@@ -195,7 +235,6 @@ namespace TelegramWP10
             TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text + "\"}");
     }
 
-    // ВАЖНО: Вся логика DLL здесь, другие файлы с классом TdJson нужно удалить!
     public static class TdJson {
         [DllImport("tdjson.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr td_json_client_create();
