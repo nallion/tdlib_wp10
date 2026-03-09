@@ -320,11 +320,18 @@ namespace TelegramWP10
                     var msgs = update["messages"] as JArray;
                     Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
-                    // TDLib шлёт пустой messages когда данных нет в кэше — повторяем запрос
-                    if (msgs == null || msgs.Count == 0) {
-                        Log("messages empty — retrying getChatHistory");
-                        TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
-                        break;
+                    // TDLib шлёт мало сообщений когда база ещё не синхронизирована — повторяем
+                    if (msgs == null || msgs.Count < 10) {
+                        int gotCount = msgs?.Count ?? 0;
+                        Log("messages too few (" + gotCount + ") — retrying after delay");
+                        var retryChat = _currentChatId;
+                        Task.Delay(800).ContinueWith(_ =>
+                            Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                                if (_currentChatId == retryChat)
+                                    TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + retryChat + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
+                            }));
+                        // Если хоть что-то есть — показываем пока что
+                        if (gotCount == 0) break;
                     }
                     _messageItems.Clear();
                     for (int i = msgs.Count - 1; i >= 0; i--) {
@@ -479,9 +486,10 @@ namespace TelegramWP10
             LoadingIndicator.Visibility = Visibility.Visible;
             MessagesListView.Visibility = Visibility.Collapsed;
             Log("OPEN CHAT id=" + _currentChatId + " title=" + chat.Title);
-            // Сбрасываем счётчик непрочитанных
             if (_chatsDict.ContainsKey(_currentChatId))
                 _chatsDict[_currentChatId].UnreadCount = 0;
+            // openChat запускает синхронизацию истории с сервером
+            TdJson.SendUtf8(_client, "{\"@type\":\"openChat\",\"chat_id\":" + _currentChatId + "}");
             TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
         }
 
@@ -523,6 +531,8 @@ namespace TelegramWP10
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e) {
+            if (_currentChatId != 0)
+                TdJson.SendUtf8(_client, "{\"@type\":\"closeChat\",\"chat_id\":" + _currentChatId + "}");
             _currentChatId = 0;
             _pendingHistoryChatId = 0;
             LoadingIndicator.Visibility = Visibility.Collapsed;
