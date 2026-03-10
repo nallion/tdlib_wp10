@@ -44,6 +44,14 @@ namespace TelegramWP10
         public string Reactions { get => _reactions; set { _reactions = value; OnPropertyChanged("Reactions"); OnPropertyChanged("ReactionsVisibility"); } }
         public Visibility ReactionsVisibility => !string.IsNullOrEmpty(_reactions) ? Visibility.Visible : Visibility.Collapsed;
 
+        // Статус прочтения
+        private bool _isOutgoing = false;
+        private bool _isRead = false;
+        public bool IsOutgoing { get => _isOutgoing; set { _isOutgoing = value; OnPropertyChanged("IsOutgoing"); OnPropertyChanged("ReadStatusVisibility"); OnPropertyChanged("ReadStatusText"); } }
+        public bool IsRead { get => _isRead; set { _isRead = value; OnPropertyChanged("IsRead"); OnPropertyChanged("ReadStatusText"); } }
+        public Visibility ReadStatusVisibility => _isOutgoing ? Visibility.Visible : Visibility.Collapsed;
+        public string ReadStatusText => _isRead ? "✓✓" : "✓";
+
         // Аудио
         private bool _isAudio = false;
         private string _audioDuration = "";

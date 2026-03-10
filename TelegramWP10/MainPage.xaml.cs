@@ -24,6 +24,7 @@ namespace TelegramWP10
         private long _currentChatId = 0;
         private long _pendingHistoryChatId = 0;
         private int _historyRetryCount = 0;
+        private long _currentChatOutboxReadId = 0;
         private string _dbPath = "";
         private bool _connectionReady = false;
         private bool _isAuthorized = false;
@@ -194,7 +195,7 @@ namespace TelegramWP10
                         Log("getChats sent");
                     }
                     if (!_chatsDict.ContainsKey(chatId))
-                        _chatsDict[chatId] = new ChatItem { Id = chatId, Title = c["title"]?.ToString() };
+                        _chatsDict[chatId] = new ChatItem { Id = chatId, Title = c["title"]?.ToString(), OutboxReadId = c["last_read_outbox_message_id"]?.ToObject<long>() ?? 0 };
                     var chatItem = _chatsDict[chatId];
                     // Заполняем последнее сообщение
                     var lastMsg = c["last_message"];
@@ -353,8 +354,18 @@ namespace TelegramWP10
 
                 case "updateChatReadOutbox":
                     long ucrId = update["chat_id"]?.ToObject<long>() ?? 0;
-                    if (ucrId != 0 && _chatsDict.ContainsKey(ucrId))
+                    long ucrMsgId = update["last_read_outbox_message_id"]?.ToObject<long>() ?? 0;
+                    if (ucrId != 0 && _chatsDict.ContainsKey(ucrId)) {
                         _chatsDict[ucrId].IsRead = true;
+                        _chatsDict[ucrId].OutboxReadId = ucrMsgId;
+                    }
+                    // Обновляем галочки в открытом чате
+                    if (ucrId == _currentChatId) {
+                        _currentChatOutboxReadId = ucrMsgId;
+                        foreach (var m in _messageItems)
+                            if (m.IsOutgoing && m.Id <= ucrMsgId)
+                                m.IsRead = true;
+                    }
                     break;
 
                 case "chats":
@@ -512,11 +523,14 @@ namespace TelegramWP10
                     ? content["text"]?["text"]?.ToString() ?? ""
                     : content["caption"]?["text"]?.ToString() ?? "";
 
+                bool outgoing = (bool)msg["is_outgoing"];
                 var item = new MessageItem {
                     Id = msgId, Text = txt,
                     Date = DateTimeOffset.FromUnixTimeSeconds((long)msg["date"]).LocalDateTime.ToString("HH:mm"),
-                    Alignment = (bool)msg["is_outgoing"] ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                    Background = (bool)msg["is_outgoing"] ? "#0088cc" : "#333333"
+                    Alignment = outgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                    Background = outgoing ? "#0088cc" : "#333333",
+                    IsOutgoing = outgoing,
+                    IsRead = outgoing && (msg["id"]?.ToObject<long>() ?? 0) <= _currentChatOutboxReadId
                 };
 
                 var replyTo = msg["reply_to"];
@@ -679,6 +693,7 @@ namespace TelegramWP10
             _currentChatId = chat.Id;
             _pendingHistoryChatId = chat.Id;
             _historyRetryCount = 0;
+            _currentChatOutboxReadId = chat.OutboxReadId;
             _messageItems.Clear();
             _messagesDict.Clear();
             _fileToMsgId.Clear();

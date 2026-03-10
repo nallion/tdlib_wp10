@@ -170,7 +170,17 @@
                                 </Border>
 
                                 <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="White" FontSize="16"/>
-                                <TextBlock Text="{Binding Date}" FontSize="10" Foreground="#AAAAAA" HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                                <!-- Дата + галочки -->
+                                <Grid HorizontalAlignment="Right" Margin="0,2,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Date}" FontSize="10" Foreground="#AAAAAA" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding ReadStatusText}" FontSize="10" Margin="4,0,0,0"
+                                               Foreground="#BBFFFFFF" VerticalAlignment="Center"
+                                               Visibility="{Binding ReadStatusVisibility}"/>
+                                </Grid>
                                 <!-- Реакции -->
                                 <Border Visibility="{Binding ReactionsVisibility}" Background="#22FFFFFF" CornerRadius="10" Padding="6,3" Margin="0,4,0,0" HorizontalAlignment="Left">
                                     <TextBlock Text="{Binding Reactions}" FontSize="14"/>

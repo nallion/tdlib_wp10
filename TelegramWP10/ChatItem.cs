@@ -7,6 +7,7 @@ namespace TelegramWP10
     public class ChatItem : INotifyPropertyChanged
     {
         public long Id { get; set; }
+        public long OutboxReadId { get; set; }
         public string Title { get; set; }
 
         private BitmapImage _photo = new BitmapImage(new Uri("ms-appx:///Assets/StoreLogo.png"));
