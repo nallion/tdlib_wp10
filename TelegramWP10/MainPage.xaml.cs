@@ -151,7 +151,6 @@ namespace TelegramWP10
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
                         LogoutButton.Visibility = Visibility.Visible;
-                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":1000}");
                     }
                     if (s == "authorizationStateLoggingOut" || s == "authorizationStateClosed") {
                         _isAuthorized = false;
@@ -183,6 +182,22 @@ namespace TelegramWP10
                     }
                     break;
 
+                case "updateChatAddedToList":
+                    long ucalId = update["chat_id"]?.ToObject<long>() ?? 0;
+                    if (ucalId != 0) {
+                        if (_chatsDict.ContainsKey(ucalId)) {
+                            var ucalItem = _chatsDict[ucalId];
+                            if (!_chatListItems.Contains(ucalItem)) {
+                                _chatListItems.Add(ucalItem);
+                                ChatCountText.Text = _chatListItems.Count.ToString();
+                            }
+                        } else {
+                            // Чат ещё не пришёл через updateNewChat — запрашиваем
+                            TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + ucalId + "}");
+                        }
+                    }
+                    break;
+
                 case "updateNewChat":
                     var c = update["chat"];
                     long chatId = (long)c["id"];
@@ -198,9 +213,6 @@ namespace TelegramWP10
                         ChatListView.Visibility = Visibility.Visible;
                         LogoutButton.Visibility = Visibility.Visible;
                         Log("After switch: LoginPanel=" + LoginPanel.Visibility + " ChatListView=" + ChatListView.Visibility);
-                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":1000}");
-                        _loadingChats = true;
-                        Log("getChats sent");
                     }
                     if (!_chatsDict.ContainsKey(chatId)) {
                         bool isChannel = c["type"]?["@type"]?.ToString() == "chatTypeSupergroup"
@@ -213,13 +225,11 @@ namespace TelegramWP10
                     if (lastMsg != null) FillChatLastMessage(chatItem, lastMsg, c);
                     // Непрочитанные
                     chatItem.UnreadCount = c["unread_count"]?.ToObject<int>() ?? 0;
-                    // Добавляем в список и грузим следующий из очереди
+                    // Добавляем в список и обновляем счётчик
                     if (!_chatListItems.Contains(chatItem)) {
                         _chatListItems.Add(chatItem);
                         ChatCountText.Text = _chatListItems.Count.ToString();
                     }
-                    // Следующий чат из очереди
-                    LoadNextChat();
                     var phSmall = c["photo"]?["small"];
                     if (phSmall != null) {
                         long phFileId = (long)phSmall["id"];
