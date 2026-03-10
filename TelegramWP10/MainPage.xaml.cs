@@ -504,20 +504,19 @@ namespace TelegramWP10
                 return;
             }
             long nextId = _pendingChatIds.Dequeue();
-            // Если уже в словаре — пропускаем и берём следующий
-            if (_chatsDict.ContainsKey(nextId)) {
-                var existing = _chatsDict[nextId];
-                if (!_chatListItems.Contains(existing)) {
-                    _chatListItems.Add(existing);
-                    ChatCountText.Text = _chatListItems.Count.ToString();
-                }
-                LoadNextChat();
-                return;
-            }
-            // TEST: пауза 1 секунда перед загрузкой каждого чата
             Task.Delay(1000).ContinueWith(_ =>
-                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                    TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + nextId + "}")));
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                    if (_chatsDict.ContainsKey(nextId)) {
+                        var existing = _chatsDict[nextId];
+                        if (!_chatListItems.Contains(existing)) {
+                            _chatListItems.Add(existing);
+                            ChatCountText.Text = _chatListItems.Count.ToString();
+                        }
+                        LoadNextChat();
+                    } else {
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + nextId + "}");
+                    }
+                }));
         }
 
         private void MoveChatToTop(long chatId) {
