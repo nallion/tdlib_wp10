@@ -532,6 +532,7 @@ namespace TelegramWP10
                     : mtype == "messageVoiceNote" ? "🎤 Голосовое"
                     : mtype == "messageSticker" ? "😊 Стикер"
                     : mtype == "messageDocument" ? "📄 Документ"
+                    : mtype == "messageAnimation" ? "🎞 GIF"
                     : mtype == "messageCall" ? ((content["is_video"]?.ToObject<bool>() ?? false) ? "📹" : "📞") + " Звонок"
                     : mtype == "messageAudio" ? "🎵 Аудио"
                     : "[" + mtype.Replace("message", "") + "]";
@@ -617,6 +618,32 @@ namespace TelegramWP10
                         else
                             TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + tfid + ",\"priority\":10,\"synchronous\":false}");
                     }
+                } else if (type == "messageAnimation") {
+                    item.IsVideo = true; // переиспользуем слот фото+иконка воспроизведения
+                    var animFile = content["animation"]?["animation"] as JObject;
+                    var animThumb = content["animation"]?["thumbnail"]?["file"] as JObject;
+                    string animCaption = content["caption"]?["text"]?.ToString() ?? "";
+                    if (!string.IsNullOrEmpty(animCaption)) item.Text = animCaption;
+                    if (animFile != null) {
+                        long afid = (long)animFile["id"];
+                        _fileToMsgId[afid] = msgId;
+                        _messagesDict[msgId] = item;
+                        string aPath = animFile["local"]?["path"]?.ToString();
+                        Log("ANIM file id=" + afid + " path=" + aPath);
+                        if (!string.IsNullOrEmpty(aPath)) item.FilePath = aPath;
+                        else TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + afid + ",\"priority\":10,\"synchronous\":false}");
+                    }
+                    if (animThumb != null) {
+                        long tfid = (long)animThumb["id"];
+                        _fileToMsgId[tfid] = msgId;
+                        _messagesDict[msgId] = item;
+                        string tPath = animThumb["local"]?["path"]?.ToString();
+                        Log("ANIM thumb id=" + tfid + " path=" + tPath);
+                        if (!string.IsNullOrEmpty(tPath))
+                            { var t = UpdateMessagePhoto(msgId, tPath); }
+                        else
+                            TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + tfid + ",\"priority\":10,\"synchronous\":false}");
+                    }
                 } else if (type == "messageDocument") {
                     var doc = content["document"];
                     var docFile = doc?["document"] as JObject;
@@ -663,7 +690,7 @@ namespace TelegramWP10
                         }
                     }
                 }
-                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo" && type != "messageDocument" && type != "messageAudio") {
+                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo" && type != "messageAnimation" && type != "messageDocument" && type != "messageAudio") {
                     if (type == "messageCall") {
                         var callContent = content;
                         bool isVideo = callContent["is_video"]?.ToObject<bool>() ?? false;
