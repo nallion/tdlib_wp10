@@ -763,41 +763,46 @@ namespace TelegramWP10
         }
 
         private async void MicButton_PointerPressed(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e) {
+            Log("MIC PRESSED — chatId=" + _currentChatId + " isRecording=" + _isRecording);
             if (_currentChatId == 0 || _isRecording) return;
             try {
+                Log("MIC init MediaCapture...");
                 _mediaCapture = new Windows.Media.Capture.MediaCapture();
                 await _mediaCapture.InitializeAsync(new Windows.Media.Capture.MediaCaptureInitializationSettings {
                     StreamingCaptureMode = Windows.Media.Capture.StreamingCaptureMode.Audio
                 });
-                _recordingFile = await _filesFolder.CreateFileAsync(
-                    "voice_" + DateTimeOffset.Now.ToUnixTimeSeconds() + ".m4a",
-                    Windows.Storage.CreationCollisionOption.ReplaceExisting);
+                Log("MIC MediaCapture initialized");
+                if (_filesFolder == null) { Log("MIC ERR _filesFolder is null!"); return; }
+                string fname = "voice_" + DateTimeOffset.Now.ToUnixTimeSeconds() + ".m4a";
+                _recordingFile = await _filesFolder.CreateFileAsync(fname, Windows.Storage.CreationCollisionOption.ReplaceExisting);
+                Log("MIC file created: " + _recordingFile.Path);
                 var profile = Windows.Media.MediaProperties.MediaEncodingProfile.CreateM4a(
                     Windows.Media.MediaProperties.AudioEncodingQuality.Medium);
                 await _mediaCapture.StartRecordToStorageFileAsync(profile, _recordingFile);
                 _isRecording = true;
                 MicButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 220, 50, 50));
-                Log("REC started: " + _recordingFile.Path);
+                Log("MIC recording started");
             } catch (Exception ex) {
-                Log("REC ERR: " + ex.Message);
+                Log("MIC INIT ERR: " + ex.GetType().Name + " — " + ex.Message);
                 _mediaCapture?.Dispose();
                 _mediaCapture = null;
             }
         }
 
         private async void MicButton_PointerReleased(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e) {
+            Log("MIC RELEASED — isRecording=" + _isRecording);
             if (!_isRecording || _mediaCapture == null) return;
             try {
                 await _mediaCapture.StopRecordAsync();
+                Log("MIC StopRecordAsync done");
                 _isRecording = false;
                 MicButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent);
                 _mediaCapture.Dispose();
                 _mediaCapture = null;
-                Log("REC stopped: " + _recordingFile.Path);
-                // Получаем длительность через свойства файла
+                Log("MIC file path: " + _recordingFile.Path);
                 var props = await _recordingFile.Properties.GetMusicPropertiesAsync();
                 int durationSec = (int)props.Duration.TotalSeconds;
-                // Отправляем как аудио
+                Log("MIC duration: " + durationSec + " sec");
                 var req = new Newtonsoft.Json.Linq.JObject {
                     ["@type"] = "sendMessage",
                     ["chat_id"] = _currentChatId,
@@ -816,9 +821,9 @@ namespace TelegramWP10
                     }
                 };
                 TdJson.SendUtf8(_client, req.ToString(Newtonsoft.Json.Formatting.None));
-                Log("SEND AUDIO duration=" + durationSec + " path=" + _recordingFile.Path);
+                Log("MIC sent audio message");
             } catch (Exception ex) {
-                Log("REC STOP ERR: " + ex.Message);
+                Log("MIC STOP ERR: " + ex.GetType().Name + " — " + ex.Message);
                 _isRecording = false;
                 MicButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent);
             }
