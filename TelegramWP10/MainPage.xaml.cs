@@ -302,15 +302,14 @@ namespace TelegramWP10
                     Log("CONN: " + connState);
                     if (connState == "connectionStateReady") {
                         _connectionReady = true;
-                        ConnectionStatus.Visibility = Visibility.Collapsed;
+                        ConnectionStatusText.Text = "";
                     } else {
                         _connectionReady = false;
-                        string connText = connState == "connectionStateConnecting" ? "Подключение..."
-                            : connState == "connectionStateUpdating" ? "Обновление..."
-                            : connState == "connectionStateWaitingForNetwork" ? "Нет сети..."
+                        string connText = connState == "connectionStateConnecting" ? "· подключение..."
+                            : connState == "connectionStateUpdating" ? "· обновление..."
+                            : connState == "connectionStateWaitingForNetwork" ? "· нет сети"
                             : "...";
                         ConnectionStatusText.Text = connText;
-                        ConnectionStatus.Visibility = Visibility.Visible;
                     }
                     break;
 
