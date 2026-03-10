@@ -30,6 +30,8 @@ namespace TelegramWP10
         private bool _isRecording = false;
         private Windows.Media.Capture.MediaCapture _mediaCapture = null;
         private Windows.Storage.StorageFile _recordingFile = null;
+        private Windows.UI.Xaml.Controls.MediaElement _currentAudioPlayer = null;
+        private long _currentAudioMsgId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
 
@@ -239,6 +241,16 @@ namespace TelegramWP10
                                         } else if (total > 0) {
                                             int pct = (int)(downloaded * 100 / total);
                                             msgItem.DownloadStatus = "⏳ " + pct + "%";
+                                        }
+                                    }
+                                    if (msgItem.IsAudio) {
+                                        if (isCompleted && !string.IsNullOrEmpty(fpath)) {
+                                            msgItem.FilePath = fpath;
+                                            msgItem.AudioPlayStatus = "▶";
+                                            Log("AUDIO file ready: " + fpath);
+                                        } else if (total > 0) {
+                                            int pct = (int)(downloaded * 100 / total);
+                                            msgItem.AudioPlayStatus = "⏳" + pct + "%";
                                         }
                                     }
                                 }
@@ -574,8 +586,33 @@ namespace TelegramWP10
                             item.DownloadStatus = "📂 Открыть";
                         }
                     }
+                } else if (type == "messageAudio") {
+                    var audio = content["audio"];
+                    var audioFile = audio?["audio"] as JObject;
+                    string title = audio?["title"]?.ToString() ?? "";
+                    string performer = audio?["performer"]?.ToString() ?? "";
+                    int dur = audio?["duration"]?.ToObject<int>() ?? 0;
+                    item.IsAudio = true;
+                    item.AudioTitle = !string.IsNullOrEmpty(performer) ? performer + " — " + title
+                                    : !string.IsNullOrEmpty(title) ? title : "Голосовое сообщение";
+                    item.AudioDuration = dur > 0 ? FormatCallDuration(dur) : "";
+                    item.AudioPlayStatus = "▶";
+                    if (audioFile != null) {
+                        long afid = (long)audioFile["id"];
+                        _fileToMsgId[afid] = msgId;
+                        _messagesDict[msgId] = item;
+                        string aPath = audioFile["local"]?["path"]?.ToString();
+                        Log("AUDIO msg=" + msgId + " file_id=" + afid + " path=" + aPath);
+                        if (!string.IsNullOrEmpty(aPath)) {
+                            item.FilePath = aPath;
+                            item.DownloadStatus = "ready";
+                        } else {
+                            item.AudioPlayStatus = "⏳";
+                            TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + afid + ",\"priority\":10,\"synchronous\":false}");
+                        }
+                    }
                 }
-                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo" && type != "messageDocument") {
+                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo" && type != "messageDocument" && type != "messageAudio") {
                     if (type == "messageCall") {
                         var callContent = content;
                         bool isVideo = callContent["is_video"]?.ToObject<bool>() ?? false;
@@ -762,7 +799,61 @@ namespace TelegramWP10
             Log("SEND DOC path=" + path);
         }
 
-        private async void MicButton_PointerPressed(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e) {
+        private async void AudioButton_Click(object sender, RoutedEventArgs e) {
+            var btn = sender as Button;
+            long msgId = (long)btn.Tag;
+            if (!_messagesDict.ContainsKey(msgId)) return;
+            var item = _messagesDict[msgId];
+            Log("AUDIO PLAY msgId=" + msgId + " path=" + item.FilePath + " status=" + item.AudioPlayStatus);
+            // Если уже играет — стоп
+            if (_currentAudioMsgId == msgId && _currentAudioPlayer != null) {
+                _currentAudioPlayer.Stop();
+                _currentAudioPlayer = null;
+                item.AudioPlayStatus = "▶";
+                _currentAudioMsgId = 0;
+                return;
+            }
+            // Остановить предыдущий
+            if (_currentAudioPlayer != null) {
+                _currentAudioPlayer.Stop();
+                if (_messagesDict.ContainsKey(_currentAudioMsgId))
+                    _messagesDict[_currentAudioMsgId].AudioPlayStatus = "▶";
+                _currentAudioPlayer = null;
+            }
+            if (string.IsNullOrEmpty(item.FilePath)) {
+                Log("AUDIO no file yet — download not ready");
+                return;
+            }
+            try {
+                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(item.FilePath);
+                var stream = await file.OpenAsync(Windows.Storage.FileAccessMode.Read);
+                var player = new Windows.UI.Xaml.Controls.MediaElement();
+                player.SetSource(stream, file.ContentType);
+                player.AutoPlay = true;
+                player.MediaEnded += (s, ev) => {
+                    item.AudioPlayStatus = "▶";
+                    _currentAudioPlayer = null;
+                    _currentAudioMsgId = 0;
+                };
+                player.MediaFailed += (s, ev) => {
+                    Log("AUDIO MediaFailed: " + ev.ErrorMessage);
+                    item.AudioPlayStatus = "▶";
+                    _currentAudioPlayer = null;
+                    _currentAudioMsgId = 0;
+                };
+                // Добавляем в визуальное дерево (невидимый)
+                AudioPlayerHost.Children.Clear();
+                AudioPlayerHost.Children.Add(player);
+                _currentAudioPlayer = player;
+                _currentAudioMsgId = msgId;
+                item.AudioPlayStatus = "⏹";
+                Log("AUDIO playing: " + item.FilePath);
+            } catch (Exception ex) {
+                Log("AUDIO PLAY ERR: " + ex.GetType().Name + " — " + ex.Message);
+            }
+        }
+
+        private void MicButton_PointerPressed(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e) {
             Log("MIC PRESSED — chatId=" + _currentChatId + " isRecording=" + _isRecording);
             if (_currentChatId == 0 || _isRecording) return;
             try {
