@@ -324,9 +324,13 @@ namespace TelegramWP10
                     bool isOnline = statusType == "userStatusOnline";
                     if (_chatsDict.ContainsKey(userId))
                         _chatsDict[userId].IsOnline = isOnline;
-                    // Обновляем шапку если открыт чат с этим пользователем
-                    if (userId == _currentChatId)
+                    // Логируем was_online для диагностики
+                    if (userId == _currentChatId) {
+                        long wo = update["status"]?["was_online"]?.ToObject<long>() ?? 0;
+                        long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                        Log("STATUS user=" + userId + " type=" + statusType + " was_online=" + wo + " now_unix=" + nowUnix + " diff=" + (nowUnix - wo) + "s");
                         UpdateChatStatus(update["status"]);
+                    }
                     break;
 
                 case "updateChatLastMessage":
@@ -473,13 +477,12 @@ namespace TelegramWP10
         }
 
         private string FormatLastSeen(long unixTime) {
-            var dt = DateTimeOffset.FromUnixTimeSeconds(unixTime);
-            var now = DateTimeOffset.Now;
-            var diff = now - dt;
-            if (diff.TotalMinutes < 1) return "только что";
-            if (diff.TotalMinutes < 60) return (int)diff.TotalMinutes + " мин. назад";
-            var dtLocal = dt.LocalDateTime;
-            var nowLocal = now.LocalDateTime;
+            long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            long diffSec = nowUnix - unixTime;
+            if (diffSec < 60) return "только что";
+            if (diffSec < 3600) return (diffSec / 60) + " мин. назад";
+            var dtLocal = DateTimeOffset.FromUnixTimeSeconds(unixTime).LocalDateTime;
+            var nowLocal = DateTimeOffset.Now.LocalDateTime;
             if (dtLocal.Day == nowLocal.Day) return "сегодня в " + dtLocal.ToString("HH:mm");
             if (dtLocal.Day == nowLocal.AddDays(-1).Day) return "вчера в " + dtLocal.ToString("HH:mm");
             return dtLocal.ToString("d MMM в HH:mm");
