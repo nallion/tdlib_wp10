@@ -464,14 +464,16 @@ namespace TelegramWP10
         }
 
         private string FormatLastSeen(long unixTime) {
-            var dt = DateTimeOffset.FromUnixTimeSeconds(unixTime).LocalDateTime;
-            var now = DateTime.Now;
+            var dt = DateTimeOffset.FromUnixTimeSeconds(unixTime);
+            var now = DateTimeOffset.Now;
             var diff = now - dt;
             if (diff.TotalMinutes < 1) return "только что";
             if (diff.TotalMinutes < 60) return (int)diff.TotalMinutes + " мин. назад";
-            if (diff.TotalHours < 24 && dt.Day == now.Day) return "сегодня в " + dt.ToString("HH:mm");
-            if ((now - dt).TotalDays < 2 && dt.Day == now.AddDays(-1).Day) return "вчера в " + dt.ToString("HH:mm");
-            return dt.ToString("d MMM в HH:mm");
+            var dtLocal = dt.LocalDateTime;
+            var nowLocal = now.LocalDateTime;
+            if (dtLocal.Day == nowLocal.Day) return "сегодня в " + dtLocal.ToString("HH:mm");
+            if (dtLocal.Day == nowLocal.AddDays(-1).Day) return "вчера в " + dtLocal.ToString("HH:mm");
+            return dtLocal.ToString("d MMM в HH:mm");
         }
 
         private string FormatCallDuration(int seconds) {
