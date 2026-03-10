@@ -26,6 +26,7 @@ namespace TelegramWP10
         private int _historyRetryCount = 0;
         private long _currentChatOutboxReadId = 0;
         private bool _loadingChats = false;
+        private Queue<long> _pendingChatIds = new Queue<long>();
         private string _dbPath = "";
         private bool _connectionReady = false;
         private bool _isAuthorized = false;
@@ -197,9 +198,9 @@ namespace TelegramWP10
                         ChatListView.Visibility = Visibility.Visible;
                         LogoutButton.Visibility = Visibility.Visible;
                         Log("After switch: LoginPanel=" + LoginPanel.Visibility + " ChatListView=" + ChatListView.Visibility);
-                        TdJson.SendUtf8(_client, "{\"@type\":\"loadChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":10}");
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":1000}");
                         _loadingChats = true;
-                        Log("loadChats sent (first batch)");
+                        Log("getChats sent");
                     }
                     if (!_chatsDict.ContainsKey(chatId)) {
                         bool isChannel = c["type"]?["@type"]?.ToString() == "chatTypeSupergroup"
@@ -212,11 +213,13 @@ namespace TelegramWP10
                     if (lastMsg != null) FillChatLastMessage(chatItem, lastMsg, c);
                     // Непрочитанные
                     chatItem.UnreadCount = c["unread_count"]?.ToObject<int>() ?? 0;
-                    // Ленивая загрузка — добавляем чат сразу как пришёл, не ждём case "chats"
+                    // Добавляем в список и грузим следующий из очереди
                     if (!_chatListItems.Contains(chatItem)) {
                         _chatListItems.Add(chatItem);
                         ChatCountText.Text = _chatListItems.Count.ToString();
                     }
+                    // Следующий чат из очереди
+                    LoadNextChat();
                     var phSmall = c["photo"]?["small"];
                     if (phSmall != null) {
                         long phFileId = (long)phSmall["id"];
@@ -391,25 +394,22 @@ namespace TelegramWP10
                     break;
 
                 case "ok":
-                    // loadChats вернул ok — чаты подгружены, запрашиваем следующий батч
-                    if (_loadingChats) {
-                        Log("loadChats ok — requesting next batch, current count=" + _chatListItems.Count);
-                        TdJson.SendUtf8(_client, "{\"@type\":\"loadChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":10}");
-                    }
+                    break;
+
+                case "chat":
+                    // Ответ на getChat — обрабатывается как updateNewChat через общий путь
+                    // TDLib также шлёт updateNewChat, поэтому просто грузим следующий
                     break;
 
                 case "chats":
-                    Log("chats received count=" + (update["chat_ids"] as JArray)?.Count
-                        + " ChatListView=" + ChatListView.Visibility
-                        + " _chatListItems=" + _chatListItems.Count
-                        + " _chatsDict=" + _chatsDict.Count);
-                    foreach (var cId in update["chat_ids"]) {
-                        long cid = (long)cId;
-                        if (_chatsDict.ContainsKey(cid) && !_chatListItems.Contains(_chatsDict[cid]))
-                            _chatListItems.Add(_chatsDict[cid]);
+                    var chatIds = update["chat_ids"] as JArray;
+                    Log("chats received count=" + chatIds?.Count);
+                    if (chatIds != null) {
+                        _pendingChatIds.Clear();
+                        foreach (var cId in chatIds)
+                            _pendingChatIds.Enqueue((long)cId);
+                        LoadNextChat();
                     }
-                    ChatCountText.Text = _chatListItems.Count.ToString();
-                    Log("chats after fill _chatListItems=" + _chatListItems.Count);
                     break;
 
                 case "messages":
@@ -491,6 +491,28 @@ namespace TelegramWP10
                     break;
             }
             CurrentChatStatus.Text = text;
+        }
+
+        private void LoadNextChat() {
+            if (_pendingChatIds.Count == 0) {
+                if (_loadingChats) {
+                    _loadingChats = false;
+                    Log("All chats loaded, total=" + _chatListItems.Count);
+                }
+                return;
+            }
+            long nextId = _pendingChatIds.Dequeue();
+            // Если уже в словаре — пропускаем и берём следующий
+            if (_chatsDict.ContainsKey(nextId)) {
+                var existing = _chatsDict[nextId];
+                if (!_chatListItems.Contains(existing)) {
+                    _chatListItems.Add(existing);
+                    ChatCountText.Text = _chatListItems.Count.ToString();
+                }
+                LoadNextChat();
+                return;
+            }
+            TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + nextId + "}");
         }
 
         private void MoveChatToTop(long chatId) {
