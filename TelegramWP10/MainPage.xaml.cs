@@ -175,6 +175,11 @@ namespace TelegramWP10
                     LoginStatus.Text = "Ошибка: " + errMsg;
                     PhoneButton.IsEnabled = true;
                     CodeButton.IsEnabled = true;
+                    // loadChats вернёт error когда все чаты загружены
+                    if (_loadingChats && (errMsg?.Contains("CHAT_LIST_EMPTY") ?? false)) {
+                        _loadingChats = false;
+                        Log("loadChats done — all chats loaded, total=" + _chatListItems.Count);
+                    }
                     break;
 
                 case "updateNewChat":
@@ -389,15 +394,6 @@ namespace TelegramWP10
                     if (_loadingChats) {
                         Log("loadChats ok — requesting next batch, current count=" + _chatListItems.Count);
                         TdJson.SendUtf8(_client, "{\"@type\":\"loadChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":10}");
-                    }
-                    break;
-
-                case "error":
-                    // loadChats вернёт error когда все чаты загружены
-                    string errCode = update["message"]?.ToString() ?? "";
-                    if (_loadingChats && errCode.Contains("CHAT_LIST_EMPTY")) {
-                        _loadingChats = false;
-                        Log("loadChats done — all chats loaded, total=" + _chatListItems.Count);
                     }
                     break;
 
