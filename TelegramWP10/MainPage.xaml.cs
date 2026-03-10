@@ -25,6 +25,7 @@ namespace TelegramWP10
         private long _pendingHistoryChatId = 0;
         private int _historyRetryCount = 0;
         private long _currentChatOutboxReadId = 0;
+        private bool _loadingChats = false;
         private string _dbPath = "";
         private bool _connectionReady = false;
         private bool _isAuthorized = false;
@@ -191,8 +192,9 @@ namespace TelegramWP10
                         ChatListView.Visibility = Visibility.Visible;
                         LogoutButton.Visibility = Visibility.Visible;
                         Log("After switch: LoginPanel=" + LoginPanel.Visibility + " ChatListView=" + ChatListView.Visibility);
-                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":1000}");
-                        Log("getChats sent");
+                        TdJson.SendUtf8(_client, "{\"@type\":\"loadChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":10}");
+                        _loadingChats = true;
+                        Log("loadChats sent (first batch)");
                     }
                     if (!_chatsDict.ContainsKey(chatId)) {
                         bool isChannel = c["type"]?["@type"]?.ToString() == "chatTypeSupergroup"
@@ -205,6 +207,9 @@ namespace TelegramWP10
                     if (lastMsg != null) FillChatLastMessage(chatItem, lastMsg, c);
                     // Непрочитанные
                     chatItem.UnreadCount = c["unread_count"]?.ToObject<int>() ?? 0;
+                    // Ленивая загрузка — добавляем чат сразу как пришёл, не ждём case "chats"
+                    if (!_chatListItems.Contains(chatItem))
+                        _chatListItems.Add(chatItem);
                     var phSmall = c["photo"]?["small"];
                     if (phSmall != null) {
                         long phFileId = (long)phSmall["id"];
@@ -376,6 +381,23 @@ namespace TelegramWP10
                         foreach (var m in _messageItems)
                             if (m.IsOutgoing && m.Id <= ucrMsgId)
                                 m.IsRead = true;
+                    }
+                    break;
+
+                case "ok":
+                    // loadChats вернул ok — чаты подгружены, запрашиваем следующий батч
+                    if (_loadingChats) {
+                        Log("loadChats ok — requesting next batch, current count=" + _chatListItems.Count);
+                        TdJson.SendUtf8(_client, "{\"@type\":\"loadChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":10}");
+                    }
+                    break;
+
+                case "error":
+                    // loadChats вернёт error когда все чаты загружены
+                    string errCode = update["message"]?.ToString() ?? "";
+                    if (_loadingChats && errCode.Contains("CHAT_LIST_EMPTY")) {
+                        _loadingChats = false;
+                        Log("loadChats done — all chats loaded, total=" + _chatListItems.Count);
                     }
                     break;
 
