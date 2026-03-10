@@ -151,6 +151,8 @@ namespace TelegramWP10
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
                         LogoutButton.Visibility = Visibility.Visible;
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":1000}");
+                        _loadingChats = true; Log("getChats sent from authReady");
                     }
                     if (s == "authorizationStateLoggingOut" || s == "authorizationStateClosed") {
                         _isAuthorized = false;
@@ -183,19 +185,7 @@ namespace TelegramWP10
                     break;
 
                 case "updateChatAddedToList":
-                    long ucalId = update["chat_id"]?.ToObject<long>() ?? 0;
-                    if (ucalId != 0) {
-                        if (_chatsDict.ContainsKey(ucalId)) {
-                            var ucalItem = _chatsDict[ucalId];
-                            if (!_chatListItems.Contains(ucalItem)) {
-                                _chatListItems.Add(ucalItem);
-                                ChatCountText.Text = _chatListItems.Count.ToString();
-                            }
-                        } else {
-                            // Чат ещё не пришёл через updateNewChat — запрашиваем
-                            TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + ucalId + "}");
-                        }
-                    }
+                    // Игнорируем — используем getChats для правильного порядка
                     break;
 
                 case "updateNewChat":
@@ -212,7 +202,8 @@ namespace TelegramWP10
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
                         LogoutButton.Visibility = Visibility.Visible;
-                        Log("After switch: LoginPanel=" + LoginPanel.Visibility + " ChatListView=" + ChatListView.Visibility);
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":1000}");
+                        _loadingChats = true; Log("getChats sent from updateNewChat");
                     }
                     if (!_chatsDict.ContainsKey(chatId)) {
                         bool isChannel = c["type"]?["@type"]?.ToString() == "chatTypeSupergroup"
@@ -225,10 +216,11 @@ namespace TelegramWP10
                     if (lastMsg != null) FillChatLastMessage(chatItem, lastMsg, c);
                     // Непрочитанные
                     chatItem.UnreadCount = c["unread_count"]?.ToObject<int>() ?? 0;
-                    // Добавляем в список и обновляем счётчик
-                    if (!_chatListItems.Contains(chatItem)) {
+                    // Если чат пришёл через LoadNextChat (из очереди) — добавляем в список
+                    if (_pendingChatIds.Count >= 0 && !_chatListItems.Contains(chatItem) && _loadingChats) {
                         _chatListItems.Add(chatItem);
                         ChatCountText.Text = _chatListItems.Count.ToString();
+                        LoadNextChat(); // грузим следующий
                     }
                     var phSmall = c["photo"]?["small"];
                     if (phSmall != null) {
