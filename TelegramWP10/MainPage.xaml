@@ -67,8 +67,12 @@
                                 </Grid.RowDefinitions>
                                 <!-- Строка 1: название + время -->
                                 <Grid Grid.Row="0">
-                                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="200" VerticalAlignment="Center" HorizontalAlignment="Left"/>
-                                    <TextBlock Text="{Binding LastMessageTime}" Foreground="#888888" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding LastMessageTime}" Foreground="#888888" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,0,0"/>
                                 </Grid>
                                 <!-- Строка 2: последнее сообщение + бейдж непрочитанных -->
                                 <Grid Grid.Row="1" Margin="0,2,0,0">
