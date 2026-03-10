@@ -341,6 +341,8 @@ namespace TelegramWP10
                     long ulcId = update["chat_id"]?.ToObject<long>() ?? 0;
                     var ulcMsg = update["last_message"];
                     if (ulcId != 0 && ulcMsg != null && _chatsDict.ContainsKey(ulcId)) {
+                        string ulcType = ulcMsg["content"]?["@type"]?.ToString() ?? "null";
+                        Log("updateChatLastMessage chat=" + ulcId + " content=" + ulcType);
                         FillChatLastMessage(_chatsDict[ulcId], ulcMsg, update);
                         MoveChatToTop(ulcId);
                     }
@@ -528,6 +530,7 @@ namespace TelegramWP10
                 string text = mtype == "messageText"
                     ? content["text"]?["text"]?.ToString() ?? ""
                     : mtype == "messagePhoto" ? "📷 Фото"
+                    : mtype == "messageVideo" && (content["video"]?["is_animation"]?.ToObject<bool>() ?? false) ? "🎞 GIF"
                     : mtype == "messageVideo" ? "🎥 Видео"
                     : mtype == "messageVoiceNote" ? "🎤 Голосовое"
                     : mtype == "messageSticker" ? "😊 Стикер"
@@ -596,7 +599,8 @@ namespace TelegramWP10
                         }
                     }
                 } else if (type == "messageVideo") {
-                    item.IsVideo = true;
+                    bool isAnim = content["video"]?["is_animation"]?.ToObject<bool>() ?? false;
+                    item.IsVideo = !isAnim; // GIF не показываем иконку ▶
                     var videoFile = content["video"]?["video"] as JObject;
                     var thumb = content["video"]?["thumbnail"]?["file"] as JObject;
                     if (videoFile != null) {
