@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" IgnorableNamespaces="uap mp">
-  <Identity Name="TelegramWP10" Publisher="CN=Test" Version="1.0.0.0" ProcessorArchitecture="arm" />
+  <Identity Name="Unogram" Publisher="CN=Test" Version="1.0.0.0" ProcessorArchitecture="arm" />
   <mp:PhoneIdentity PhoneProductId="12345678-1234-1234-1234-1234567890ab" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
   <Properties>
-    <DisplayName>TelegramWP10</DisplayName>
+    <DisplayName>Unogram</DisplayName>
     <PublisherDisplayName>Test</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -15,7 +15,7 @@
   </Resources>
   <Applications>
     <Application Id="App" Executable="TelegramWP10.exe" EntryPoint="TelegramWP10.App">
-      <uap:VisualElements DisplayName="TelegramWP10" Description="TelegramWP10" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+      <uap:VisualElements DisplayName="Unogram" Description="Unogram" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
     </Application>
   </Applications>
   <Capabilities>
