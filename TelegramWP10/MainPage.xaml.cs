@@ -514,7 +514,10 @@ namespace TelegramWP10
                 LoadNextChat();
                 return;
             }
-            TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + nextId + "}");
+            // TEST: пауза 1 секунда перед загрузкой каждого чата
+            Task.Delay(1000).ContinueWith(_ =>
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + nextId + "}")));
         }
 
         private void MoveChatToTop(long chatId) {
