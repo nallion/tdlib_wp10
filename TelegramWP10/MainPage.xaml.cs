@@ -491,6 +491,8 @@ namespace TelegramWP10
         private long LocalUnixNow() {
             return DateTimeOffset.UtcNow.ToUnixTimeSeconds() + _serverTimeOffset;
         }
+
+        private string FormatLastSeen(long unixTime) {
             long nowUnix = LocalUnixNow();
             long diffSec = nowUnix - unixTime;
             if (diffSec < 60) return "только что";
