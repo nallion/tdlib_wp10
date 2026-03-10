@@ -360,9 +360,8 @@ namespace TelegramWP10
                     Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count + " total=" + totalCount);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
                     int gotCount = msgs?.Count ?? 0;
-                    // Retry только если total_count обещает больше чем пришло — иначе сообщений реально столько
-                    if (gotCount < 10 && totalCount > gotCount) {
-                        Log("messages too few (" + gotCount + "/" + totalCount + ") — retrying after delay");
+                    if (gotCount < 2) {
+                        Log("messages too few (" + gotCount + ") — retrying after delay");
                         var retryChat = _currentChatId;
                         Task.Delay(800).ContinueWith(_ =>
                             Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
