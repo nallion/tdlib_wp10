@@ -853,7 +853,7 @@ namespace TelegramWP10
             }
         }
 
-        private void MicButton_PointerPressed(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e) {
+        private async void MicButton_PointerPressed(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e) {
             Log("MIC PRESSED — chatId=" + _currentChatId + " isRecording=" + _isRecording);
             if (_currentChatId == 0 || _isRecording) return;
             try {
