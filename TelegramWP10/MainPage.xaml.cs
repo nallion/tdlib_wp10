@@ -213,8 +213,10 @@ namespace TelegramWP10
                     // Непрочитанные
                     chatItem.UnreadCount = c["unread_count"]?.ToObject<int>() ?? 0;
                     // Ленивая загрузка — добавляем чат сразу как пришёл, не ждём case "chats"
-                    if (!_chatListItems.Contains(chatItem))
+                    if (!_chatListItems.Contains(chatItem)) {
                         _chatListItems.Add(chatItem);
+                        ChatCountText.Text = _chatListItems.Count.ToString();
+                    }
                     var phSmall = c["photo"]?["small"];
                     if (phSmall != null) {
                         long phFileId = (long)phSmall["id"];
