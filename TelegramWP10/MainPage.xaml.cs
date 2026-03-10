@@ -322,12 +322,16 @@ namespace TelegramWP10
                     long userId = update["user_id"]?.ToObject<long>() ?? 0;
                     string statusType = update["status"]?["@type"]?.ToString();
                     bool isOnline = statusType == "userStatusOnline";
+                    // expires — серверное время, используем для калибровки часов
+                    if (isOnline) {
+                        long expires = update["status"]?["expires"]?.ToObject<long>() ?? 0;
+                        if (expires > 0) UpdateServerTimeOffset(expires - 30); // expires = now+30s на сервере
+                    }
                     if (_chatsDict.ContainsKey(userId))
                         _chatsDict[userId].IsOnline = isOnline;
-                    // Логируем was_online для диагностики
                     if (userId == _currentChatId) {
                         long wo = update["status"]?["was_online"]?.ToObject<long>() ?? 0;
-                        long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                        long nowUnix = LocalUnixNow();
                         Log("STATUS user=" + userId + " type=" + statusType + " was_online=" + wo + " now_unix=" + nowUnix + " diff=" + (nowUnix - wo) + "s");
                         UpdateChatStatus(update["status"]);
                     }
@@ -476,8 +480,18 @@ namespace TelegramWP10
             _chatListItems.Insert(0, item);
         }
 
-        private string FormatLastSeen(long unixTime) {
-            long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        private long _serverTimeOffset = 0; // разница: server_unix - local_unix
+
+        private void UpdateServerTimeOffset(long serverUnix) {
+            long localUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            _serverTimeOffset = serverUnix - localUnix;
+            Log("CLOCK OFFSET: " + _serverTimeOffset + "s (server ahead of phone)");
+        }
+
+        private long LocalUnixNow() {
+            return DateTimeOffset.UtcNow.ToUnixTimeSeconds() + _serverTimeOffset;
+        }
+            long nowUnix = LocalUnixNow();
             long diffSec = nowUnix - unixTime;
             if (diffSec < 60) return "только что";
             if (diffSec < 3600) return (diffSec / 60) + " мин. назад";
