@@ -332,8 +332,10 @@ namespace TelegramWP10
                 case "updateChatLastMessage":
                     long ulcId = update["chat_id"]?.ToObject<long>() ?? 0;
                     var ulcMsg = update["last_message"];
-                    if (ulcId != 0 && ulcMsg != null && _chatsDict.ContainsKey(ulcId))
+                    if (ulcId != 0 && ulcMsg != null && _chatsDict.ContainsKey(ulcId)) {
                         FillChatLastMessage(_chatsDict[ulcId], ulcMsg, update);
+                        MoveChatToTop(ulcId);
+                    }
                     break;
 
                 case "updateChatReadInbox":
@@ -461,6 +463,13 @@ namespace TelegramWP10
                     break;
             }
             CurrentChatStatus.Text = text;
+        }
+
+        private void MoveChatToTop(long chatId) {
+            var item = _chatListItems.FirstOrDefault(c => c.Id == chatId);
+            if (item == null || _chatListItems.IndexOf(item) == 0) return;
+            _chatListItems.Remove(item);
+            _chatListItems.Insert(0, item);
         }
 
         private string FormatLastSeen(long unixTime) {
