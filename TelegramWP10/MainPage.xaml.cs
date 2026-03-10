@@ -22,6 +22,7 @@ namespace TelegramWP10
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
         private long _currentChatId = 0;
         private long _pendingHistoryChatId = 0;
+        private int _historyRetryCount = 0;
         private string _dbPath = "";
         private bool _connectionReady = false;
         private bool _isAuthorized = false;
@@ -360,8 +361,9 @@ namespace TelegramWP10
                     Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count + " total=" + totalCount);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
                     int gotCount = msgs?.Count ?? 0;
-                    if (gotCount < 2 && totalCount > 1) {
-                        Log("messages too few (" + gotCount + ") — retrying after delay");
+                    if (gotCount < 2 && _historyRetryCount < 5) {
+                        _historyRetryCount++;
+                        Log("messages too few (" + gotCount + ") retry #" + _historyRetryCount);
                         var retryChat = _currentChatId;
                         Task.Delay(800).ContinueWith(_ =>
                             Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
@@ -601,6 +603,7 @@ namespace TelegramWP10
             if (chat.Id == _currentChatId) return;
             _currentChatId = chat.Id;
             _pendingHistoryChatId = chat.Id;
+            _historyRetryCount = 0;
             _messageItems.Clear();
             _messagesDict.Clear();
             _fileToMsgId.Clear();
