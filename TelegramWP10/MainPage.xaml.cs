@@ -361,7 +361,7 @@ namespace TelegramWP10
                     Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count + " total=" + totalCount);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
                     int gotCount = msgs?.Count ?? 0;
-                    if (gotCount < 2 && _historyRetryCount < 5) {
+                    if (gotCount < 2 && _historyRetryCount < 3) {
                         _historyRetryCount++;
                         Log("messages too few (" + gotCount + ") retry #" + _historyRetryCount);
                         var retryChat = _currentChatId;
