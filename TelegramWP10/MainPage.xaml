@@ -9,6 +9,8 @@
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <Grid>
+        <!-- Невидимый хост для воспроизведения аудио -->
+        <StackPanel x:Name="AudioPlayerHost" Visibility="Collapsed" Width="0" Height="0"/>
         <Grid x:Name="StartPanel" Padding="20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -91,8 +93,6 @@
         </Grid>
 
         <Grid x:Name="MessagesPanel" Visibility="Collapsed" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-            <!-- Невидимый хост для MediaElement -->
-            <StackPanel x:Name="AudioPlayerHost" Visibility="Collapsed"/>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
