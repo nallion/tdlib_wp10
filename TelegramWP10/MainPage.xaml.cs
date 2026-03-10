@@ -32,6 +32,7 @@ namespace TelegramWP10
         private Windows.Storage.StorageFile _recordingFile = null;
         private Windows.UI.Xaml.Controls.MediaElement _currentAudioPlayer = null;
         private long _currentAudioMsgId = 0;
+        private long _pendingDeleteChatId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
 
@@ -918,6 +919,50 @@ namespace TelegramWP10
                 _isRecording = false;
                 MicButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent);
             }
+        }
+
+        private void ChatItem_Holding(object sender, Windows.UI.Xaml.Input.HoldingRoutedEventArgs e) {
+            if (e.HoldingState != Windows.UI.Input.HoldingState.Started) return;
+            var grid = sender as Grid;
+            if (grid == null) return;
+            var chat = grid.DataContext as ChatItem;
+            if (chat == null) return;
+            _pendingDeleteChatId = chat.Id;
+            Log("HOLDING chatId=" + chat.Id + " title=" + chat.Title);
+            FlyoutBase.ShowAttachedFlyout(grid);
+        }
+
+        private async void DeleteChat_Click(object sender, RoutedEventArgs e) {
+            var item = sender as MenuFlyoutItem;
+            // Ищем Tag через визуальное дерево — идём вверх от MenuFlyoutItem
+            // Tag был установлен на Grid в ChatItem_Holding
+            // Ищем чат через _chatsDict по совпадению с открытым flyout
+            // Надёжнее хранить pending id отдельно
+            if (_pendingDeleteChatId == 0) return;
+            long chatId = _pendingDeleteChatId;
+            _pendingDeleteChatId = 0;
+            Log("DELETE CHAT id=" + chatId);
+            // Показываем диалог подтверждения
+            var dialog = new Windows.UI.Popups.MessageDialog("Удалить переписку? Это действие нельзя отменить.", "Удалить переписку");
+            dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить", async cmd => {
+                var req = Newtonsoft.Json.Linq.JObject.FromObject(new {
+                    type = "deleteChatHistory",
+                    chat_id = chatId,
+                    remove_from_chat_list = true,
+                    revoke = false
+                });
+                req["@type"] = req["type"]; req.Remove("type");
+                TdJson.SendUtf8(_client, req.ToString(Newtonsoft.Json.Formatting.None));
+                Log("DELETE CHAT sent for " + chatId);
+                // Убираем из списка
+                await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                    var toRemove = _chatItems.FirstOrDefault(c => c.Id == chatId);
+                    if (toRemove != null) _chatItems.Remove(toRemove);
+                    if (_chatsDict.ContainsKey(chatId)) _chatsDict.Remove(chatId);
+                });
+            }));
+            dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+            await dialog.ShowAsync();
         }
 
         private void LogoutButton_Click(object sender, RoutedEventArgs e) {

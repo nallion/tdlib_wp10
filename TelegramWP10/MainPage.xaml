@@ -41,7 +41,12 @@
                 </ListView.Header>
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Grid Margin="0,6">
+                        <Grid Margin="0,6" Holding="ChatItem_Holding">
+                            <FlyoutBase.AttachedFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="🗑 Удалить переписку" Click="DeleteChat_Click"/>
+                                </MenuFlyout>
+                            </FlyoutBase.AttachedFlyout>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="60"/>
                                 <ColumnDefinition Width="*"/>
