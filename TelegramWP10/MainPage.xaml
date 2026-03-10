@@ -165,13 +165,17 @@
             <Grid Grid.Row="2" Padding="10" Background="#222222">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <Button Content="📎" Click="AttachFile_Click" Width="44" Height="40"
                         Background="Transparent" Foreground="White" FontSize="18" Padding="0"/>
-                <TextBox x:Name="MessageInput" Grid.Column="1" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="100" Margin="8,0"/>
-                <Button Grid.Column="2" Content="➤" Click="SendMessage_Click" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
+                <Button x:Name="MicButton" Grid.Column="1" Content="🎤" Width="44" Height="40"
+                        Background="Transparent" Foreground="White" FontSize="18" Padding="0"
+                        PointerPressed="MicButton_PointerPressed" PointerReleased="MicButton_PointerReleased"/>
+                <TextBox x:Name="MessageInput" Grid.Column="2" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="100" Margin="8,0"/>
+                <Button Grid.Column="3" Content="➤" Click="SendMessage_Click" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
             </Grid>
         </Grid>
     </Grid>

@@ -27,6 +27,9 @@ namespace TelegramWP10
         private bool _connectionReady = false;
         private bool _isAuthorized = false;
         private bool _isLoadingHistory = false;
+        private bool _isRecording = false;
+        private Windows.Media.Capture.MediaCapture _mediaCapture = null;
+        private Windows.Storage.StorageFile _recordingFile = null;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
 
@@ -446,6 +449,12 @@ namespace TelegramWP10
             return dt.ToString("d MMM в HH:mm");
         }
 
+        private string FormatCallDuration(int seconds) {
+            if (seconds < 60) return seconds + " сек";
+            int m = seconds / 60, s = seconds % 60;
+            return m + ":" + s.ToString("D2");
+        }
+
         private string FormatFileSize(long bytes) {
             if (bytes <= 0) return "";
             if (bytes < 1024) return bytes + " Б";
@@ -465,6 +474,8 @@ namespace TelegramWP10
                     : mtype == "messageVoiceNote" ? "🎤 Голосовое"
                     : mtype == "messageSticker" ? "😊 Стикер"
                     : mtype == "messageDocument" ? "📄 Документ"
+                    : mtype == "messageCall" ? ((content["is_video"]?.ToObject<bool>() ?? false) ? "📹" : "📞") + " Звонок"
+                    : mtype == "messageAudio" ? "🎵 Аудио"
                     : "[" + mtype.Replace("message", "") + "]";
                 item.LastMessage = text;
                 long date = msg["date"]?.ToObject<long>() ?? 0;
@@ -564,8 +575,33 @@ namespace TelegramWP10
                         }
                     }
                 }
-                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo" && type != "messageDocument")
-                    item.Text = "[" + type.Replace("message", "") + "]";
+                if (string.IsNullOrEmpty(item.Text) && type != "messagePhoto" && type != "messageVideo" && type != "messageDocument") {
+                    if (type == "messageCall") {
+                        var callContent = content;
+                        bool isVideo = callContent["is_video"]?.ToObject<bool>() ?? false;
+                        string callEmoji = isVideo ? "📹" : "📞";
+                        bool isOutgoing = (bool)msg["is_outgoing"];
+                        string direction = isOutgoing ? "Исходящий" : "Входящий";
+                        int duration = callContent["duration"]?.ToObject<int>() ?? 0;
+                        string discardReason = callContent["discard_reason"]?["@type"]?.ToString() ?? "";
+                        string durationStr = duration > 0 ? " · " + FormatCallDuration(duration) : "";
+                        if (discardReason == "callDiscardReasonMissed")
+                            item.Text = callEmoji + " Пропущенный звонок";
+                        else if (discardReason == "callDiscardReasonDeclined")
+                            item.Text = callEmoji + " Отклонённый звонок";
+                        else
+                            item.Text = callEmoji + " " + direction + " звонок" + durationStr;
+                    } else if (type == "messageAudio") {
+                        string title = content["audio"]?["title"]?.ToString() ?? "";
+                        string performer = content["audio"]?["performer"]?.ToString() ?? "";
+                        int dur = content["audio"]?["duration"]?.ToObject<int>() ?? 0;
+                        string durStr = dur > 0 ? " · " + FormatCallDuration(dur) : "";
+                        string label = !string.IsNullOrEmpty(performer) ? performer + " — " + title : title;
+                        item.Text = "🎵 " + (string.IsNullOrEmpty(label) ? "Аудио" : label) + durStr;
+                    } else {
+                        item.Text = "[" + type.Replace("message", "") + "]";
+                    }
+                }
                 return item;
             } catch (Exception ex) { Log("ParseMessage ERR: " + ex.Message); return null; }
         }
@@ -724,6 +760,68 @@ namespace TelegramWP10
             };
             TdJson.SendUtf8(_client, req.ToString(Newtonsoft.Json.Formatting.None));
             Log("SEND DOC path=" + path);
+        }
+
+        private async void MicButton_PointerPressed(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e) {
+            if (_currentChatId == 0 || _isRecording) return;
+            try {
+                _mediaCapture = new Windows.Media.Capture.MediaCapture();
+                await _mediaCapture.InitializeAsync(new Windows.Media.Capture.MediaCaptureInitializationSettings {
+                    StreamingCaptureMode = Windows.Media.Capture.StreamingCaptureMode.Audio
+                });
+                _recordingFile = await _filesFolder.CreateFileAsync(
+                    "voice_" + DateTimeOffset.Now.ToUnixTimeSeconds() + ".m4a",
+                    Windows.Storage.CreationCollisionOption.ReplaceExisting);
+                var profile = Windows.Media.MediaProperties.MediaEncodingProfile.CreateM4a(
+                    Windows.Media.MediaProperties.AudioEncodingQuality.Medium);
+                await _mediaCapture.StartRecordToStorageFileAsync(profile, _recordingFile);
+                _isRecording = true;
+                MicButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 220, 50, 50));
+                Log("REC started: " + _recordingFile.Path);
+            } catch (Exception ex) {
+                Log("REC ERR: " + ex.Message);
+                _mediaCapture?.Dispose();
+                _mediaCapture = null;
+            }
+        }
+
+        private async void MicButton_PointerReleased(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e) {
+            if (!_isRecording || _mediaCapture == null) return;
+            try {
+                await _mediaCapture.StopRecordAsync();
+                _isRecording = false;
+                MicButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent);
+                _mediaCapture.Dispose();
+                _mediaCapture = null;
+                Log("REC stopped: " + _recordingFile.Path);
+                // Получаем длительность через свойства файла
+                var props = await _recordingFile.Properties.GetMusicPropertiesAsync();
+                int durationSec = (int)props.Duration.TotalSeconds;
+                // Отправляем как аудио
+                var req = new Newtonsoft.Json.Linq.JObject {
+                    ["@type"] = "sendMessage",
+                    ["chat_id"] = _currentChatId,
+                    ["input_message_content"] = new Newtonsoft.Json.Linq.JObject {
+                        ["@type"] = "inputMessageAudio",
+                        ["audio"] = new Newtonsoft.Json.Linq.JObject {
+                            ["@type"] = "inputFileLocal",
+                            ["path"] = _recordingFile.Path
+                        },
+                        ["duration"] = durationSec,
+                        ["title"] = "Голосовое сообщение",
+                        ["caption"] = new Newtonsoft.Json.Linq.JObject {
+                            ["@type"] = "formattedText",
+                            ["text"] = ""
+                        }
+                    }
+                };
+                TdJson.SendUtf8(_client, req.ToString(Newtonsoft.Json.Formatting.None));
+                Log("SEND AUDIO duration=" + durationSec + " path=" + _recordingFile.Path);
+            } catch (Exception ex) {
+                Log("REC STOP ERR: " + ex.Message);
+                _isRecording = false;
+                MicButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent);
+            }
         }
 
         private void LogoutButton_Click(object sender, RoutedEventArgs e) {
