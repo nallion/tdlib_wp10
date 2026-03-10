@@ -200,7 +200,7 @@
                 <TextBlock Text="Загрузка..." Foreground="#888888" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,80,0,0"/>
             </Grid>
 
-            <Grid Grid.Row="2" Padding="10" Background="#222222">
+            <Grid x:Name="InputGrid" Grid.Row="2" Padding="10" Background="#222222">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>

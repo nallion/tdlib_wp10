@@ -194,8 +194,11 @@ namespace TelegramWP10
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"offset_order\":\"9223372036854775807\",\"offset_chat_id\":0,\"limit\":1000}");
                         Log("getChats sent");
                     }
-                    if (!_chatsDict.ContainsKey(chatId))
-                        _chatsDict[chatId] = new ChatItem { Id = chatId, Title = c["title"]?.ToString(), OutboxReadId = c["last_read_outbox_message_id"]?.ToObject<long>() ?? 0 };
+                    if (!_chatsDict.ContainsKey(chatId)) {
+                        bool isChannel = c["type"]?["@type"]?.ToString() == "chatTypeSupergroup"
+                            && (c["type"]?["is_channel"]?.ToObject<bool>() ?? false);
+                        _chatsDict[chatId] = new ChatItem { Id = chatId, Title = c["title"]?.ToString(), OutboxReadId = c["last_read_outbox_message_id"]?.ToObject<long>() ?? 0, IsChannel = isChannel };
+                    }
                     var chatItem = _chatsDict[chatId];
                     // Заполняем последнее сообщение
                     var lastMsg = c["last_message"];
@@ -296,15 +299,6 @@ namespace TelegramWP10
                             : "...";
                         ConnectionStatusText.Text = connText;
                         ConnectionStatus.Visibility = Visibility.Visible;
-                    }
-                    break;
-
-
-                    Log("chats count=" + (update["chat_ids"] as JArray)?.Count);
-                    foreach (var cId in update["chat_ids"]) {
-                        long cid = (long)cId;
-                        if (_chatsDict.ContainsKey(cid) && !_chatListItems.Contains(_chatsDict[cid]))
-                            _chatListItems.Add(_chatsDict[cid]);
                     }
                     break;
 
@@ -795,8 +789,13 @@ namespace TelegramWP10
             // Показываем статус если это личный чат
             if (_usersDict.ContainsKey(_currentChatId))
                 UpdateChatStatus(_usersDict[_currentChatId]["status"]);
-            else
+            else if (chat.IsChannel) {
+                CurrentChatStatus.Text = "Канал";
+                CurrentChatStatus.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 204, 232, 255));
+            } else
                 CurrentChatStatus.Text = "";
+            // Скрываем поле ввода для каналов
+            InputGrid.Visibility = chat.IsChannel ? Visibility.Collapsed : Visibility.Visible;
             _isLoadingHistory = true;
             LoadingIndicator.Visibility = Visibility.Visible;
             MessagesListView.Visibility = Visibility.Collapsed;
