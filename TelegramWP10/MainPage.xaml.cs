@@ -537,10 +537,12 @@ namespace TelegramWP10
                 if (date > 0)
                     item.LastMessageTime = DateTimeOffset.FromUnixTimeSeconds(date).LocalDateTime.ToString("HH:mm");
                 item.IsOutgoing = msg["is_outgoing"]?.ToObject<bool>() ?? false;
-                // Статус: прочитано если last_read_outbox_message_id >= id сообщения
+                // Статус: прочитано если OutboxReadId >= id сообщения
                 long msgId = msg["id"]?.ToObject<long>() ?? 0;
-                long readOutbox = chatOrUpdate["last_read_outbox_message_id"]?.ToObject<long>() ?? 0;
-                item.IsRead = item.IsOutgoing && readOutbox >= msgId;
+                // last_read_outbox_message_id есть только в начальном chat объекте, не в updateChatLastMessage
+                long readOutbox = chatOrUpdate["last_read_outbox_message_id"]?.ToObject<long>() ?? -1;
+                if (readOutbox >= 0) item.OutboxReadId = readOutbox;
+                item.IsRead = item.IsOutgoing && item.OutboxReadId >= msgId;
             } catch { }
         }
 
