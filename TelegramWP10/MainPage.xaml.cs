@@ -929,7 +929,7 @@ namespace TelegramWP10
             if (chat == null) return;
             _pendingDeleteChatId = chat.Id;
             Log("HOLDING chatId=" + chat.Id + " title=" + chat.Title);
-            FlyoutBase.ShowAttachedFlyout(grid);
+            Windows.UI.Xaml.Controls.Primitives.FlyoutBase.ShowAttachedFlyout(grid);
         }
 
         private async void DeleteChat_Click(object sender, RoutedEventArgs e) {
@@ -956,8 +956,8 @@ namespace TelegramWP10
                 Log("DELETE CHAT sent for " + chatId);
                 // Убираем из списка
                 await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                    var toRemove = _chatItems.FirstOrDefault(c => c.Id == chatId);
-                    if (toRemove != null) _chatItems.Remove(toRemove);
+                    var toRemove = _chatListItems.FirstOrDefault(c => c.Id == chatId);
+                    if (toRemove != null) _chatListItems.Remove(toRemove);
                     if (_chatsDict.ContainsKey(chatId)) _chatsDict.Remove(chatId);
                 });
             }));
