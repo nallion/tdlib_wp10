@@ -1247,27 +1247,22 @@ namespace TelegramWP10
             TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text.Trim() + "\"}");
         }
 
+        private MessageItem _selectedMessageForCopy = null;
+
         private void MessageBubble_Holding(object sender, Windows.UI.Xaml.Input.HoldingRoutedEventArgs e) {
             if (e.HoldingState != Windows.UI.Input.HoldingState.Started) return;
             var border = sender as Border;
             if (border == null) return;
+            _selectedMessageForCopy = border.DataContext as MessageItem;
             FlyoutBase.ShowAttachedFlyout(border);
         }
 
         private void CopyMessage_Click(object sender, RoutedEventArgs e) {
-            var item = sender as MenuFlyoutItem;
-            if (item == null) return;
-            // DataContext пузыря — MessageItem
-            var msg = (item.Parent as MenuFlyout)?.Target?.DataContext as MessageItem
-                   ?? ((item.Parent as MenuFlyout)?.Items[0] as FrameworkElement)?.DataContext as MessageItem;
-            // Ищем через визуальное дерево
-            var flyout = item.Parent as MenuFlyout;
-            var target = flyout?.Target;
-            var msgItem = target?.DataContext as MessageItem;
-            if (msgItem == null) return;
+            if (_selectedMessageForCopy == null) return;
             var dp = new Windows.ApplicationModel.DataTransfer.DataPackage();
-            dp.SetText(msgItem.Text ?? "");
+            dp.SetText(_selectedMessageForCopy.Text ?? "");
             Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
+            _selectedMessageForCopy = null;
         }
 
         private void MessageInput_Holding(object sender, Windows.UI.Xaml.Input.HoldingRoutedEventArgs e) {
