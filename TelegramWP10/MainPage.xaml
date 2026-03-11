@@ -141,7 +141,6 @@
                                         <TextBlock Text="{Binding ReplyToText}" FontSize="12" Foreground="#CCCCCC" TextTrimming="CharacterEllipsis" MaxLines="2"/>
                                     </StackPanel>
                                 </Border>
-                                </Border>
 
                                 <Grid Visibility="{Binding PhotoVisibility}" Margin="0,0,0,5">
                                     <Image Source="{Binding AttachedPhoto}" Stretch="Uniform" MaxWidth="250"/>
