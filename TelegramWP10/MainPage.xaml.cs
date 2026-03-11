@@ -23,6 +23,7 @@ namespace TelegramWP10
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
         private long _currentChatId = 0;
         private bool _currentChatIsGroup = false;
+        private Windows.UI.Xaml.DispatcherTimer _statusTimer;
         private long _pendingHistoryChatId = 0;
         private int _historyRetryCount = 0;
         private long _currentChatOutboxReadId = 0;
@@ -55,6 +56,14 @@ namespace TelegramWP10
             LoadingIndicator.Visibility = Visibility.Collapsed;
             MessagesListView.Visibility = Visibility.Collapsed;
             LogoutButton.Visibility = Visibility.Collapsed;
+            // Таймер обновления статуса "был(а) N мин. назад"
+            _statusTimer = new Windows.UI.Xaml.DispatcherTimer();
+            _statusTimer.Interval = TimeSpan.FromSeconds(60);
+            _statusTimer.Tick += (s, e) => {
+                if (_currentChatId != 0 && _usersDict.ContainsKey(_currentChatId))
+                    UpdateChatStatus(_usersDict[_currentChatId]["status"]);
+            };
+            _statusTimer.Start();
             InitAsync();
         }
 
@@ -67,8 +76,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
+                var appFolder = await Windows.Storage.KnownFolders.MusicLibrary
+                    .CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
