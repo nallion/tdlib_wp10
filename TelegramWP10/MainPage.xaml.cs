@@ -22,6 +22,8 @@ namespace TelegramWP10
         private Dictionary<long, long> _fileToChatId = new Dictionary<long, long>();
         private Dictionary<long, long> _fileToMsgId = new Dictionary<long, long>();
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
+        // replyMsgId → MessageItem которому нужно заполнить ReplyToText
+        private Dictionary<long, MessageItem> _replyRequests = new Dictionary<long, MessageItem>();
         private long _currentChatId = 0;
         private bool _currentChatIsGroup = false;
         private Windows.UI.Xaml.DispatcherTimer _statusTimer;
@@ -434,6 +436,26 @@ namespace TelegramWP10
                     // TDLib также шлёт updateNewChat, поэтому просто грузим следующий
                     break;
 
+                case "message":
+                    // Ответ на getMessage — заполняем ReplyToText если ждали
+                    long fetchedMsgId = update["id"]?.ToObject<long>() ?? 0;
+                    if (fetchedMsgId != 0 && _replyRequests.ContainsKey(fetchedMsgId)) {
+                        var waitingItem = _replyRequests[fetchedMsgId];
+                        _replyRequests.Remove(fetchedMsgId);
+                        var fc = update["content"];
+                        string fType = fc?["@type"]?.ToString() ?? "";
+                        string fText = fType == "messageText"
+                            ? fc["text"]?["text"]?.ToString()
+                            : fType == "messagePhoto" ? "📷 Фото"
+                            : fType == "messageVideo" ? "🎥 Видео"
+                            : fType == "messageDocument" ? "📄 Файл"
+                            : fType == "messageAudio" ? "🎵 Аудио"
+                            : fType == "messageVoiceNote" ? "🎤 Голосовое"
+                            : "Сообщение";
+                        waitingItem.ReplyToText = string.IsNullOrEmpty(fText) ? "Сообщение" : fText;
+                    }
+                    break;
+
                 case "chats":
                     var chatIds = update["chat_ids"] as JArray;
                     Log("chats received count=" + chatIds?.Count);
@@ -718,7 +740,17 @@ namespace TelegramWP10
                                 : null;
                         }
                     }
-                    item.ReplyToText = string.IsNullOrEmpty(replyText) ? "Сообщение" : replyText;
+                    item.ReplyToText = string.IsNullOrEmpty(replyText) ? "…" : replyText;
+                    // Если текст не получили — запрашиваем сообщение явно
+                    if (string.IsNullOrEmpty(replyText)) {
+                        long replyMsgId = replyTo["message_id"]?.ToObject<long>() ?? 0;
+                        long replyChatId = replyTo["chat_id"]?.ToObject<long>() ?? 0;
+                        if (replyChatId == 0) replyChatId = (long)msg["chat_id"];
+                        if (replyMsgId != 0) {
+                            _replyRequests[replyMsgId] = item;
+                            TdJson.SendUtf8(_client, "{\"@type\":\"getMessage\",\"chat_id\":" + replyChatId + ",\"message_id\":" + replyMsgId + "}");
+                        }
+                    }
                 }
 
                 // Реакции
@@ -931,6 +963,7 @@ namespace TelegramWP10
             _messageItems.Clear();
             _messagesDict.Clear();
             _fileToMsgId.Clear();
+            _replyRequests.Clear();
             // Показываем панель чата с индикатором загрузки, но список сообщений ещё скрыт
             StartPanel.Visibility = Visibility.Collapsed;
             MessagesPanel.Visibility = Visibility.Visible;
