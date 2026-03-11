@@ -64,6 +64,14 @@ namespace TelegramWP10
                     UpdateChatStatus(_usersDict[_currentChatId]["status"]);
             };
             _statusTimer.Start();
+            // Системная кнопка "назад"
+            var sysNav = Windows.UI.Core.SystemNavigationManager.GetForCurrentView();
+            sysNav.BackRequested += (s, e) => {
+                if (_currentChatId != 0) {
+                    BackButton_Click(null, null);
+                    e.Handled = true;
+                }
+            };
             InitAsync();
         }
 
