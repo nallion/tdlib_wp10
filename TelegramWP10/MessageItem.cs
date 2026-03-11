@@ -52,6 +52,17 @@ namespace TelegramWP10
         public Visibility ReadStatusVisibility => _isOutgoing ? Visibility.Visible : Visibility.Collapsed;
         public string ReadStatusText => _isRead ? "✓✓" : "✓";
 
+        // Ник отправителя (для групп, входящих)
+        private string _senderName = "";
+        public string SenderName { get => _senderName; set { _senderName = value; OnPropertyChanged("SenderName"); OnPropertyChanged("SenderNameVisibility"); } }
+        public Visibility SenderNameVisibility => !string.IsNullOrEmpty(_senderName) && !_isOutgoing ? Visibility.Visible : Visibility.Collapsed;
+
+        public string SenderColor { get; set; } = "#7EC8E3";
+
+        // Ник автора цитаты
+        public string ReplyAuthor { get; set; } = "";
+        public string ReplyAuthorVisibility => !string.IsNullOrEmpty(ReplyAuthor) ? "Visible" : "Collapsed";
+
         // Аудио
         private bool _isAudio = false;
         private string _audioDuration = "";

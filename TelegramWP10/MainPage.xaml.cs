@@ -22,6 +22,7 @@ namespace TelegramWP10
         private Dictionary<long, long> _fileToMsgId = new Dictionary<long, long>();
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
         private long _currentChatId = 0;
+        private bool _currentChatIsGroup = false;
         private long _pendingHistoryChatId = 0;
         private int _historyRetryCount = 0;
         private long _currentChatOutboxReadId = 0;
@@ -606,6 +607,40 @@ namespace TelegramWP10
             } catch { }
         }
 
+        // Цвета для ников (по user_id % количество цветов)
+        private static readonly string[] _senderColors = {
+            "#E17076", "#7EC8E3", "#A695E7", "#76C99F",
+            "#F2C94C", "#F78C6C", "#67D7CC", "#FF8A65"
+        };
+
+        private string GetSenderName(JToken senderId) {
+            if (senderId == null) return "";
+            string sType = senderId["@type"]?.ToString();
+            if (sType == "messageSenderUser") {
+                long uid = senderId["user_id"]?.ToObject<long>() ?? 0;
+                if (_usersDict.ContainsKey(uid)) {
+                    var u = _usersDict[uid];
+                    string fn = u["first_name"]?.ToString() ?? "";
+                    string ln = u["last_name"]?.ToString() ?? "";
+                    return (fn + " " + ln).Trim();
+                }
+                return "User " + uid;
+            }
+            if (sType == "messageSenderChat") {
+                long cid = senderId["chat_id"]?.ToObject<long>() ?? 0;
+                if (_chatsDict.ContainsKey(cid)) return _chatsDict[cid].Title;
+                return "Chat " + cid;
+            }
+            return "";
+        }
+
+        private string GetSenderColor(JToken senderId) {
+            if (senderId == null) return _senderColors[0];
+            long id = senderId["user_id"]?.ToObject<long>()
+                   ?? senderId["chat_id"]?.ToObject<long>() ?? 0;
+            return _senderColors[Math.Abs((int)(id % _senderColors.Length))];
+        }
+
         private MessageItem ParseMessage(JToken msg) {
             try {
                 long msgId = (long)msg["id"];
@@ -616,18 +651,51 @@ namespace TelegramWP10
                     : content["caption"]?["text"]?.ToString() ?? "";
 
                 bool outgoing = (bool)msg["is_outgoing"];
+                var senderId = msg["sender_id"];
                 var item = new MessageItem {
                     Id = msgId, Text = txt,
                     Date = DateTimeOffset.FromUnixTimeSeconds((long)msg["date"]).LocalDateTime.ToString("HH:mm"),
                     Alignment = outgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left,
                     Background = outgoing ? "#0088cc" : "#333333",
                     IsOutgoing = outgoing,
-                    IsRead = outgoing && (msg["id"]?.ToObject<long>() ?? 0) <= _currentChatOutboxReadId
+                    IsRead = outgoing && (msg["id"]?.ToObject<long>() ?? 0) <= _currentChatOutboxReadId,
+                    SenderName = outgoing ? "" : (_currentChatIsGroup ? GetSenderName(senderId) : ""),
+                    SenderColor = GetSenderColor(senderId)
                 };
 
                 var replyTo = msg["reply_to"];
-                if (replyTo != null && replyTo["@type"]?.ToString() == "messageReplyToMessage")
-                    item.ReplyToText = "Ответ на сообщение";
+                if (replyTo != null && replyTo["@type"]?.ToString() == "messageReplyToMessage") {
+                    // Автор цитаты
+                    var replyOrigin = replyTo["origin"];
+                    if (replyOrigin != null) {
+                        string oType = replyOrigin["@type"]?.ToString();
+                        if (oType == "messageOriginUser") {
+                            long oUid = replyOrigin["sender_user_id"]?.ToObject<long>() ?? 0;
+                            if (_usersDict.ContainsKey(oUid)) {
+                                var u = _usersDict[oUid];
+                                item.ReplyAuthor = (u["first_name"]?.ToString() + " " + u["last_name"]?.ToString()).Trim();
+                            }
+                        } else if (oType == "messageOriginChat" || oType == "messageOriginChannel") {
+                            long oCid = replyOrigin["sender_chat_id"]?.ToObject<long>() ?? 0;
+                            if (_chatsDict.ContainsKey(oCid)) item.ReplyAuthor = _chatsDict[oCid].Title;
+                        }
+                    }
+                    // Текст цитаты
+                    var replyContent = replyTo["content"];
+                    if (replyContent != null) {
+                        string rType = replyContent["@type"]?.ToString();
+                        item.ReplyToText = rType == "messageText"
+                            ? replyContent["text"]?["text"]?.ToString() ?? "Сообщение"
+                            : rType == "messagePhoto" ? "📷 Фото"
+                            : rType == "messageVideo" ? "🎥 Видео"
+                            : rType == "messageDocument" ? "📄 Файл"
+                            : rType == "messageAudio" ? "🎵 Аудио"
+                            : rType == "messageVoiceNote" ? "🎤 Голосовое"
+                            : "Сообщение";
+                    } else {
+                        item.ReplyToText = "Сообщение";
+                    }
+                }
 
                 // Реакции
                 var reactions = msg["interaction_info"]?["reactions"]?["reactions"] as JArray;
@@ -830,6 +898,9 @@ namespace TelegramWP10
             var chat = (ChatItem)e.ClickedItem;
             if (chat.Id == _currentChatId) return;
             _currentChatId = chat.Id;
+            _currentChatIsGroup = _chatsDict.ContainsKey(chat.Id) &&
+                (_chatsDict[chat.Id].IsChannel == false) &&
+                (chat.Id < 0); // группы и супергруппы имеют отрицательный ID
             _pendingHistoryChatId = chat.Id;
             _historyRetryCount = 0;
             _currentChatOutboxReadId = chat.OutboxReadId;
