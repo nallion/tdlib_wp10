@@ -702,21 +702,23 @@ namespace TelegramWP10
                             if (_chatsDict.ContainsKey(oCid)) item.ReplyAuthor = _chatsDict[oCid].Title;
                         }
                     }
-                    // Текст цитаты
-                    var replyContent = replyTo["content"];
-                    if (replyContent != null) {
-                        string rType = replyContent["@type"]?.ToString();
-                        item.ReplyToText = rType == "messageText"
-                            ? replyContent["text"]?["text"]?.ToString() ?? "Сообщение"
-                            : rType == "messagePhoto" ? "📷 Фото"
-                            : rType == "messageVideo" ? "🎥 Видео"
-                            : rType == "messageDocument" ? "📄 Файл"
-                            : rType == "messageAudio" ? "🎵 Аудио"
-                            : rType == "messageVoiceNote" ? "🎤 Голосовое"
-                            : "Сообщение";
-                    } else {
-                        item.ReplyToText = "Сообщение";
+                    // Текст цитаты — сначала quote (выделенный фрагмент), потом content
+                    string replyText = replyTo["quote"]?["text"]?.ToString();
+                    if (string.IsNullOrEmpty(replyText)) {
+                        var replyContent = replyTo["content"];
+                        if (replyContent != null) {
+                            string rType = replyContent["@type"]?.ToString();
+                            replyText = rType == "messageText"
+                                ? replyContent["text"]?["text"]?.ToString()
+                                : rType == "messagePhoto" ? "📷 Фото"
+                                : rType == "messageVideo" ? "🎥 Видео"
+                                : rType == "messageDocument" ? "📄 Файл"
+                                : rType == "messageAudio" ? "🎵 Аудио"
+                                : rType == "messageVoiceNote" ? "🎤 Голосовое"
+                                : null;
+                        }
                     }
+                    item.ReplyToText = string.IsNullOrEmpty(replyText) ? "Сообщение" : replyText;
                 }
 
                 // Реакции
