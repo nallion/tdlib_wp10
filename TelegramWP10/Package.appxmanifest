@@ -20,7 +20,6 @@
   </Applications>
   <Capabilities>
     <Capability Name="internetClient" />
-    <uap:Capability Name="musicLibrary" />
     <DeviceCapability Name="microphone" />
   </Capabilities>
 </Package>

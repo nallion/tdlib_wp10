@@ -24,6 +24,8 @@
                 <Button x:Name="PhoneButton" Content="Далее" Click="SendPhone_Click" HorizontalAlignment="Stretch" Margin="0,10"/>
                 <TextBox x:Name="CodeInput" Header="Код из Unogram" Visibility="Collapsed" Margin="0,10"/>
                 <Button x:Name="CodeButton" Content="Войти" Click="SendCode_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
+                <PasswordBox x:Name="PasswordInput" Header="Пароль 2FA" Visibility="Collapsed" Margin="0,10"/>
+                <Button x:Name="PasswordButton" Content="Подтвердить" Click="SendPassword_Click" Visibility="Collapsed" HorizontalAlignment="Stretch"/>
             </StackPanel>
 
             <ListView x:Name="ChatListView" Grid.Row="1" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">

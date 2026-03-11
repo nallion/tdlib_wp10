@@ -66,8 +66,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var appFolder = await Windows.Storage.KnownFolders.MusicLibrary
-                    .CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
+                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
+                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
@@ -144,8 +144,14 @@ namespace TelegramWP10
                         CodeButton.Visibility = Visibility.Visible;
                         CodeInput.Focus(FocusState.Programmatic);
                     }
-                    if (s == "authorizationStateWaitPassword")
+                    if (s == "authorizationStateWaitPassword") {
                         LoginStatus.Text = "Введите пароль 2FA";
+                        CodeInput.Visibility = Visibility.Collapsed;
+                        CodeButton.Visibility = Visibility.Collapsed;
+                        PasswordInput.Visibility = Visibility.Visible;
+                        PasswordButton.Visibility = Visibility.Visible;
+                        PasswordInput.Focus(FocusState.Programmatic);
+                    }
                     if (s == "authorizationStateReady") {
                         _isAuthorized = true;
                         LoginPanel.Visibility = Visibility.Collapsed;
@@ -167,6 +173,9 @@ namespace TelegramWP10
                         PhoneButton.IsEnabled = true;
                         CodeInput.Visibility = Visibility.Collapsed;
                         CodeButton.Visibility = Visibility.Collapsed;
+                        PasswordInput.Password = "";
+                        PasswordInput.Visibility = Visibility.Collapsed;
+                        PasswordButton.Visibility = Visibility.Collapsed;
                         LoginStatus.Text = "";
                     }
                     break;
@@ -1143,6 +1152,14 @@ namespace TelegramWP10
             CodeButton.IsEnabled = false;
             LoginStatus.Text = "Проверка кода...";
             TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationCode\",\"code\":\"" + CodeInput.Text.Trim() + "\"}");
+        }
+
+        private void SendPassword_Click(object sender, RoutedEventArgs e) {
+            if (string.IsNullOrWhiteSpace(PasswordInput.Password)) return;
+            PasswordButton.IsEnabled = false;
+            LoginStatus.Text = "Проверка пароля...";
+            var pwd = PasswordInput.Password.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            TdJson.SendUtf8(_client, "{\"@type\":\"checkAuthenticationPassword\",\"password\":\"" + pwd + "\"}");
         }
     }
 }
