@@ -125,7 +125,13 @@
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}">
+                        <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}"
+                                Holding="MessageBubble_Holding">
+                            <FlyoutBase.AttachedFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="Копировать текст" Click="CopyMessage_Click"/>
+                                </MenuFlyout>
+                            </FlyoutBase.AttachedFlyout>
                             <StackPanel MaxWidth="260">
                                 <!-- Ник отправителя (только входящие в группах) -->
                                 <TextBlock Text="{Binding SenderName}" FontSize="12" FontWeight="Bold"
@@ -226,7 +232,14 @@
                         PointerExited="MicButton_PointerReleased">
                     <TextBlock Text="🎤" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
-                <TextBox x:Name="MessageInput" Grid.Column="2" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="100" Margin="8,0"/>
+                <TextBox x:Name="MessageInput" Grid.Column="2" PlaceholderText="Сообщение..." AcceptsReturn="True" MaxHeight="100" Margin="8,0"
+                         Holding="MessageInput_Holding">
+                    <FlyoutBase.AttachedFlyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem Text="Вставить текст" Click="PasteToInput_Click"/>
+                        </MenuFlyout>
+                    </FlyoutBase.AttachedFlyout>
+                </TextBox>
                 <Button Grid.Column="3" Content="➤" Click="SendMessage_Click" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
             </Grid>
         </Grid>
