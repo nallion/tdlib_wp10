@@ -451,7 +451,7 @@ namespace TelegramWP10
                     Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count + " total=" + totalCount);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
                     int gotCount = msgs?.Count ?? 0;
-                    if (gotCount < 2 && _historyRetryCount < 3) {
+                    if (gotCount < 2 && _historyRetryCount < 2) {
                         _historyRetryCount++;
                         Log("messages too few (" + gotCount + ") retry #" + _historyRetryCount);
                         var retryChat = _currentChatId;
@@ -572,7 +572,7 @@ namespace TelegramWP10
         }
 
         private string FormatLastSeen(long unixTime) {
-            long nowUnix = LocalUnixNow(); // с учётом расхождения часов телефона и сервера
+            long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             long diffSec = nowUnix - unixTime;
             if (diffSec < 0) diffSec = 0;
             if (diffSec < 60) return "только что";
