@@ -553,11 +553,14 @@ namespace TelegramWP10
             _chatListItems.Insert(0, item);
         }
 
-        private long _serverTimeOffset = 0; // разница: server_unix - local_unix
+        private long _serverTimeOffset = 0;
+        private bool _serverTimeOffsetSet = false;
 
         private void UpdateServerTimeOffset(long serverUnix) {
+            if (_serverTimeOffsetSet) return; // устанавливаем только один раз
             long localUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             _serverTimeOffset = serverUnix - localUnix;
+            _serverTimeOffsetSet = true;
             Log("CLOCK OFFSET: " + _serverTimeOffset + "s (server ahead of phone)");
         }
 
