@@ -371,6 +371,9 @@ namespace TelegramWP10
                     }
                     if (_chatsDict.ContainsKey(userId))
                         _chatsDict[userId].IsOnline = isOnline;
+                    // Синхронизируем статус в _usersDict чтобы при открытии чата был актуальный
+                    if (_usersDict.ContainsKey(userId) && update["status"] != null)
+                        _usersDict[userId]["status"] = update["status"];
                     if (userId == _currentChatId) {
                         long wo = update["status"]?["was_online"]?.ToObject<long>() ?? 0;
                         long nowUnix = LocalUnixNow();
