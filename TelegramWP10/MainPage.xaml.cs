@@ -513,7 +513,7 @@ namespace TelegramWP10
                 return;
             }
             long nextId = _pendingChatIds.Dequeue();
-            Task.Delay(1000).ContinueWith(_ =>
+            Task.Delay(100).ContinueWith(_ =>
                 Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                     if (_chatsDict.ContainsKey(nextId)) {
                         var existing = _chatsDict[nextId];
@@ -521,10 +521,10 @@ namespace TelegramWP10
                             _chatListItems.Add(existing);
                             ChatCountText.Text = _chatListItems.Count.ToString();
                         }
-                        LoadNextChat();
                     } else {
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + nextId + "}");
                     }
+                    LoadNextChat();
                 }));
         }
 
