@@ -125,7 +125,7 @@
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Border Background=\"{Binding Background}\" Padding=\"8,5\" Margin=\"0,4\" CornerRadius=\"10\" HorizontalAlignment=\"{Binding Alignment}\">
+                        <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}">
                             <StackPanel MaxWidth="260">
                                 <!-- Ник отправителя (только входящие в группах) -->
                                 <TextBlock Text="{Binding SenderName}" FontSize="12" FontWeight="Bold"
