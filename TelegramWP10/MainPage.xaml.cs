@@ -566,10 +566,8 @@ namespace TelegramWP10
         }
 
         private string FormatLastSeen(long unixTime) {
-            // was_online — серверный UTC timestamp, сравниваем напрямую с UtcNow
-            long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            long nowUnix = LocalUnixNow(); // с учётом расхождения часов телефона и сервера
             long diffSec = nowUnix - unixTime;
-            // Компенсируем возможное небольшое расхождение часов телефона с сервером
             if (diffSec < 0) diffSec = 0;
             if (diffSec < 60) return "только что";
             if (diffSec < 3600) return (diffSec / 60) + " мин. назад";
