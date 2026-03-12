@@ -130,9 +130,9 @@
                             <FlyoutBase.AttachedFlyout>
                                 <MenuFlyout>
                                     <MenuFlyoutItem Text="Копировать текст" Click="CopyMessage_Click"/>
-                                    <MenuFlyoutItem Text="✏ Редактировать" Click="EditMessage_Click"/>
-                                    <MenuFlyoutItem Text="🗑 Удалить сообщение" Click="DeleteMessageSelf_Click"/>
-                                    <MenuFlyoutItem Text="🗑 Удалить у всех" Click="DeleteMessageAll_Click"/>
+                                    <MenuFlyoutItem x:Name="MenuEdit" Text="✏ Редактировать" Click="EditMessage_Click"/>
+                                    <MenuFlyoutItem x:Name="MenuDeleteSelf" Text="🗑 Удалить сообщение" Click="DeleteMessageSelf_Click"/>
+                                    <MenuFlyoutItem x:Name="MenuDeleteAll" Text="🗑 Удалить у всех" Click="DeleteMessageAll_Click"/>
                                 </MenuFlyout>
                             </FlyoutBase.AttachedFlyout>
                             <StackPanel MaxWidth="260">

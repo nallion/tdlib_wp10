@@ -1536,6 +1536,21 @@ namespace TelegramWP10
             var border = sender as Border;
             if (border == null) return;
             _selectedMessageForCopy = border.DataContext as MessageItem;
+
+            // Показываем/скрываем пункты редактирования и удаления в зависимости от типа сообщения
+            var flyout = FlyoutBase.GetAttachedFlyout(border) as MenuFlyout;
+            if (flyout != null) {
+                bool canEdit = _selectedMessageForCopy?.IsOutgoing == true && !string.IsNullOrEmpty(_selectedMessageForCopy?.Text);
+                bool canDelete = _selectedMessageForCopy?.IsOutgoing == true;
+                foreach (var item in flyout.Items) {
+                    if (item is MenuFlyoutItem mfi) {
+                        if (mfi.Name == "MenuEdit") mfi.Visibility = canEdit ? Visibility.Visible : Visibility.Collapsed;
+                        if (mfi.Name == "MenuDeleteSelf" || mfi.Name == "MenuDeleteAll")
+                            mfi.Visibility = canDelete ? Visibility.Visible : Visibility.Collapsed;
+                    }
+                }
+            }
+
             FlyoutBase.ShowAttachedFlyout(border);
         }
 
