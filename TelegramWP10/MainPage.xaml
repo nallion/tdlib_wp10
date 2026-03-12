@@ -301,10 +301,6 @@
         <!-- Полноэкранный просмотр фото -->
         <Grid x:Name="PhotoOverlay" Visibility="Collapsed" Background="#DD000000"
               Grid.Row="0" Grid.RowSpan="2">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
             <ScrollViewer ZoomMode="Enabled" MinZoomFactor="1" MaxZoomFactor="5"
                           HorizontalScrollMode="Enabled" VerticalScrollMode="Enabled"
                           HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
@@ -318,8 +314,9 @@
                     HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="0,8,8,0" Width="44" Height="44"
                     Background="#88000000" Foreground="White" FontSize="18" Padding="0"/>
-            <TextBlock x:Name="PhotoOverlayStatus" Grid.Row="1" Text="" Foreground="White"
-                       HorizontalAlignment="Center" FontSize="14" Margin="0,0,0,16"/>
+            <TextBlock x:Name="PhotoOverlayStatus" Text="" Foreground="White"
+                       VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                       FontSize="14" Margin="0,0,0,16"/>
         </Grid>
     </Grid>
 </Page>

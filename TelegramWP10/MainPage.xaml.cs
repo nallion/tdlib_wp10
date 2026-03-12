@@ -21,6 +21,7 @@ namespace TelegramWP10
         private Dictionary<long, JToken> _usersDict = new Dictionary<long, JToken>(); // userId → user object
         private Dictionary<long, long> _fileToChatId = new Dictionary<long, long>();
         private Dictionary<long, long> _fileToMsgId = new Dictionary<long, long>();
+        private Dictionary<long, long> _videoFileIds = new Dictionary<long, long>(); // file_id → msgId только для видеофайлов
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
         // replyMsgId → MessageItem которому нужно заполнить ReplyToText
         private Dictionary<long, MessageItem> _replyRequests = new Dictionary<long, MessageItem>();
@@ -984,6 +985,7 @@ namespace TelegramWP10
                     if (videoFile != null) {
                         long vfid = (long)videoFile["id"];
                         _fileToMsgId[vfid] = msgId;
+                        _videoFileIds[vfid] = msgId; // отдельно — только видеофайлы
                         _messagesDict[msgId] = item;
                         string vPath = videoFile["local"]?["path"]?.ToString();
                         Log("VIDEO file id=" + vfid + " path=" + vPath);
@@ -1166,6 +1168,7 @@ namespace TelegramWP10
             _messageItems.Clear();
             _messagesDict.Clear();
             _fileToMsgId.Clear();
+            _videoFileIds.Clear();
             _replyRequests.Clear();
             _editingMessageId = 0;
             _fullPhotoMsgId = 0;
@@ -1341,7 +1344,7 @@ namespace TelegramWP10
             if (item == null || !item.IsVideo) return;
             if (string.IsNullOrEmpty(item.FilePath)) {
                 Log("VIDEO tap — downloading");
-                foreach (var kv in _fileToMsgId)
+                foreach (var kv in _videoFileIds)
                     if (kv.Value == item.Id) {
                         TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + kv.Key + ",\"priority\":32,\"synchronous\":false}");
                         break;
