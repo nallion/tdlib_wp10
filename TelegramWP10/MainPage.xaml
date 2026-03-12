@@ -155,10 +155,12 @@
                                     <Image Source="{Binding AttachedPhoto}" Stretch="Uniform" MaxWidth="250"
                                            Tapped="PhotoImage_Tapped"/>
                                     <TextBlock Text="▶" Foreground="White" FontSize="40" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding VideoIconVisibility}" Opacity="0.8" IsHitTestVisible="False"/>
-                                    <TextBlock Text="{Binding VideoDownloadProgress}" Foreground="White" FontSize="14" FontWeight="Bold"
-                                               VerticalAlignment="Center" HorizontalAlignment="Center"
-                                               Visibility="{Binding VideoProgressVisibility}"
-                                               IsHitTestVisible="False" Background="#88000000" Padding="6,2"/>
+                                    <Border VerticalAlignment="Center" HorizontalAlignment="Center"
+                                            Background="#88000000" Padding="6,2"
+                                            Visibility="{Binding VideoProgressVisibility}">
+                                        <TextBlock Text="{Binding VideoDownloadProgress}" Foreground="White"
+                                                   FontSize="14" FontWeight="Bold" IsHitTestVisible="False"/>
+                                    </Border>
                                 </Grid>
 
                                 <!-- Документ -->
