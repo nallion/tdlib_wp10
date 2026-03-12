@@ -106,6 +106,8 @@ namespace TelegramWP10
 
         // Полный file_id фото для загрузки полноразмерной версии
         public long FullPhotoFileId { get; set; }
+        // Entities для ссылок (offset, length, url)
+        public List<(int Offset, int Length, string Url)> Entities { get; set; }
 
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

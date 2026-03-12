@@ -214,7 +214,8 @@
                                     </Grid>
                                 </Border>
 
-                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="White" FontSize="16"/>
+                                <RichTextBlock x:Name="MsgTextBlock" TextWrapping="Wrap" Foreground="White" FontSize="16"
+                                               Tag="{Binding Id}" Loaded="MsgRichText_Loaded" DataContextChanged="MsgRichText_DataContextChanged"/>
                                 <!-- Дата + галочки -->
                                 <Grid HorizontalAlignment="Right" Margin="0,2,0,0">
                                     <Grid.ColumnDefinitions>

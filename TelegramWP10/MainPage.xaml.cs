@@ -821,10 +821,30 @@ namespace TelegramWP10
                     ? content["text"]?["text"]?.ToString() ?? ""
                     : content["caption"]?["text"]?.ToString() ?? "";
 
+                // Парсим entities для ссылок
+                var entitiesJson = type == "messageText"
+                    ? content["text"]?["entities"] as Newtonsoft.Json.Linq.JArray
+                    : content["caption"]?["entities"] as Newtonsoft.Json.Linq.JArray;
+                var entities = new List<(int, int, string)>();
+                if (entitiesJson != null) {
+                    foreach (var ent in entitiesJson) {
+                        string eType = ent["type"]?["@type"]?.ToString() ?? "";
+                        int offset = ent["offset"]?.ToObject<int>() ?? 0;
+                        int length = ent["length"]?.ToObject<int>() ?? 0;
+                        string url = null;
+                        if (eType == "textEntityTypeUrl")
+                            url = txt.Substring(Math.Max(0, offset), Math.Min(length, txt.Length - offset));
+                        else if (eType == "textEntityTypeTextUrl")
+                            url = ent["type"]?["url"]?.ToString();
+                        if (url != null) entities.Add((offset, length, url));
+                    }
+                }
+
                 bool outgoing = (bool)msg["is_outgoing"];
                 var senderId = msg["sender_id"];
                 var item = new MessageItem {
                     Id = msgId, Text = txt,
+                    Entities = entities.Count > 0 ? entities : null,
                     Date = DateTimeOffset.FromUnixTimeSeconds((long)msg["date"]).LocalDateTime.ToString("HH:mm"),
                     Alignment = outgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left,
                     Background = outgoing ? "#0088cc" : "#333333",
@@ -1183,6 +1203,57 @@ namespace TelegramWP10
                 }
             };
             TdJson.SendUtf8(_client, sendReq.ToString());
+        }
+
+        private void MsgRichText_DataContextChanged(Windows.UI.Xaml.FrameworkElement sender, Windows.UI.Xaml.DataContextChangedEventArgs args) {
+            var rtb = sender as Windows.UI.Xaml.Controls.RichTextBlock;
+            if (rtb == null) return;
+            var item = rtb.DataContext as MessageItem;
+            if (item == null) return;
+            BuildRichText(rtb, item);
+        }
+
+        private void MsgRichText_Loaded(object sender, RoutedEventArgs e) {
+            var rtb = sender as Windows.UI.Xaml.Controls.RichTextBlock;
+            if (rtb == null) return;
+            var item = rtb.DataContext as MessageItem;
+            if (item == null) return;
+            BuildRichText(rtb, item);
+        }
+
+        private void BuildRichText(Windows.UI.Xaml.Controls.RichTextBlock rtb, MessageItem item) {
+            rtb.Blocks.Clear();
+            var para = new Windows.UI.Xaml.Documents.Paragraph();
+            string text = item.Text ?? "";
+
+            if (item.Entities == null || item.Entities.Count == 0) {
+                para.Inlines.Add(new Windows.UI.Xaml.Documents.Run { Text = text });
+            } else {
+                int pos = 0;
+                // сортируем по offset на случай неупорядоченности
+                var sorted = item.Entities.OrderBy(x => x.Offset).ToList();
+                foreach (var (offset, length, url) in sorted) {
+                    if (offset > pos)
+                        para.Inlines.Add(new Windows.UI.Xaml.Documents.Run { Text = text.Substring(pos, offset - pos) });
+                    int safeLen = Math.Min(length, text.Length - offset);
+                    if (safeLen > 0 && offset < text.Length) {
+                        string linkText = text.Substring(offset, safeLen);
+                        try {
+                            var hl = new Windows.UI.Xaml.Documents.Hyperlink {
+                                NavigateUri = new Uri(url.StartsWith("http") ? url : "https://" + url)
+                            };
+                            hl.Inlines.Add(new Windows.UI.Xaml.Documents.Run { Text = linkText });
+                            para.Inlines.Add(hl);
+                        } catch {
+                            para.Inlines.Add(new Windows.UI.Xaml.Documents.Run { Text = linkText });
+                        }
+                    }
+                    pos = offset + safeLen;
+                }
+                if (pos < text.Length)
+                    para.Inlines.Add(new Windows.UI.Xaml.Documents.Run { Text = text.Substring(pos) });
+            }
+            rtb.Blocks.Add(para);
         }
 
         private async void PhotoImage_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e) {
