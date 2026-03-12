@@ -94,7 +94,12 @@ namespace TelegramWP10
             // Системная кнопка "назад"
             var sysNav = Windows.UI.Core.SystemNavigationManager.GetForCurrentView();
             sysNav.BackRequested += (s, e) => {
-                if (_currentChatId != 0) {
+                if (PhotoOverlay.Visibility == Visibility.Visible) {
+                    PhotoOverlay.Visibility = Visibility.Collapsed;
+                    PhotoOverlayImage.Source = null;
+                    _fullPhotoMsgId = 0;
+                    e.Handled = true;
+                } else if (_currentChatId != 0) {
                     BackButton_Click(null, null);
                     e.Handled = true;
                 }
