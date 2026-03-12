@@ -1162,14 +1162,14 @@ namespace TelegramWP10
                 player.CommandManager.IsEnabled = false; // отключаем дефолтный командный менеджер
                 player.Play();
                 player.MediaEnded += (s, ev) => {
-                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
                         _currentAudioMsgId = 0;
                     });
                 };
                 player.MediaFailed += (s, ev) => {
-                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                         Log("AUDIO MediaFailed: " + ev.ErrorMessage);
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
