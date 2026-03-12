@@ -16,6 +16,13 @@
   <Applications>
     <Application Id="App" Executable="TelegramWP10.exe" EntryPoint="TelegramWP10.App">
       <uap:VisualElements DisplayName="Unogram" Description="Unogram" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <uap:Extension Category="windows.backgroundTasks" EntryPoint="TelegramWP10.App">
+          <uap:BackgroundTasks>
+            <uap:Task Type="systemEvent" />
+          </uap:BackgroundTasks>
+        </uap:Extension>
+      </Extensions>
     </Application>
   </Applications>
   <Capabilities>

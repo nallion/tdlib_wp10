@@ -1144,6 +1144,22 @@ namespace TelegramWP10
                 player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
                 var source = Windows.Media.Core.MediaSource.CreateFromStream(stream, file.ContentType);
                 player.Source = source;
+                // Подключаем SystemMediaTransportControls — без этого фоновое воспроизведение не работает
+                var smtc = player.SystemMediaTransportControls;
+                smtc.IsEnabled = true;
+                smtc.IsPlayEnabled = true;
+                smtc.IsPauseEnabled = true;
+                smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
+                smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
+                smtc.DisplayUpdater.Update();
+                smtc.ButtonPressed += (ss, ee) => {
+                    if (ee.Button == Windows.Media.SystemMediaTransportControlsButton.Pause ||
+                        ee.Button == Windows.Media.SystemMediaTransportControlsButton.Stop)
+                        player.Pause();
+                    else if (ee.Button == Windows.Media.SystemMediaTransportControlsButton.Play)
+                        player.Play();
+                };
+                player.CommandManager.IsEnabled = false; // отключаем дефолтный командный менеджер
                 player.Play();
                 player.MediaEnded += (s, ev) => {
                     Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
