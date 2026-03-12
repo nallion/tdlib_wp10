@@ -41,6 +41,7 @@ namespace TelegramWP10
         private Windows.Storage.StorageFile _recordingFile = null;
         private Windows.Media.Playback.MediaPlayer _currentAudioPlayer = null;
         private long _currentAudioMsgId = 0;
+        private Windows.Media.Core.MediaSource _currentAudioSource = null;
         private Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionSession _mediaSession = null;
         private long _pendingDeleteChatId = 0;
         private StorageFolder _filesFolder = null;
@@ -1147,6 +1148,7 @@ namespace TelegramWP10
             if (_currentAudioMsgId == msgId && _currentAudioPlayer != null) {
                 _currentAudioPlayer.Pause(); _currentAudioPlayer.Source = null;
                 _currentAudioPlayer = null;
+                _currentAudioSource = null;
                 item.AudioPlayStatus = "▶";
                 _currentAudioMsgId = 0;
                 ReleaseMediaSession();
@@ -1158,6 +1160,7 @@ namespace TelegramWP10
                 if (_messagesDict.ContainsKey(_currentAudioMsgId))
                     _messagesDict[_currentAudioMsgId].AudioPlayStatus = "▶";
                 _currentAudioPlayer = null;
+                _currentAudioSource = null;
                 ReleaseMediaSession();
             }
             if (string.IsNullOrEmpty(item.FilePath)) {
@@ -1169,6 +1172,7 @@ namespace TelegramWP10
                 var player = new Windows.Media.Playback.MediaPlayer();
                 player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
                 var source = Windows.Media.Core.MediaSource.CreateFromStorageFile(file);
+                _currentAudioSource = source;
                 player.Source = source;
                 // Отключаем SMTC — иначе система посылает Pause через него при блокировке экрана
                 var smtc = player.SystemMediaTransportControls;
@@ -1193,6 +1197,7 @@ namespace TelegramWP10
                         Log("AUDIO ENDED");
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
+                        _currentAudioSource = null;
                         _currentAudioMsgId = 0;
                         ReleaseMediaSession();
                     });
@@ -1202,6 +1207,7 @@ namespace TelegramWP10
                         Log("AUDIO FAILED: " + ev.ErrorMessage);
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
+                        _currentAudioSource = null;
                         _currentAudioMsgId = 0;
                         ReleaseMediaSession();
                     });
