@@ -39,7 +39,7 @@ namespace TelegramWP10
         private bool _isRecording = false;
         private Windows.Media.Capture.MediaCapture _mediaCapture = null;
         private Windows.Storage.StorageFile _recordingFile = null;
-        private Windows.UI.Xaml.Controls.MediaElement _currentAudioPlayer = null;
+        private Windows.Media.Playback.MediaPlayer _currentAudioPlayer = null;
         private long _currentAudioMsgId = 0;
         private long _pendingDeleteChatId = 0;
         private StorageFolder _filesFolder = null;
@@ -1120,7 +1120,7 @@ namespace TelegramWP10
             Log("AUDIO PLAY msgId=" + msgId + " path=" + item.FilePath + " status=" + item.AudioPlayStatus);
             // Если уже играет — стоп
             if (_currentAudioMsgId == msgId && _currentAudioPlayer != null) {
-                _currentAudioPlayer.Stop();
+                _currentAudioPlayer.Pause(); _currentAudioPlayer.Source = null;
                 _currentAudioPlayer = null;
                 item.AudioPlayStatus = "▶";
                 _currentAudioMsgId = 0;
@@ -1128,7 +1128,7 @@ namespace TelegramWP10
             }
             // Остановить предыдущий
             if (_currentAudioPlayer != null) {
-                _currentAudioPlayer.Stop();
+                _currentAudioPlayer.Pause(); _currentAudioPlayer.Source = null;
                 if (_messagesDict.ContainsKey(_currentAudioMsgId))
                     _messagesDict[_currentAudioMsgId].AudioPlayStatus = "▶";
                 _currentAudioPlayer = null;
@@ -1140,25 +1140,28 @@ namespace TelegramWP10
             try {
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(item.FilePath);
                 var stream = await file.OpenAsync(Windows.Storage.FileAccessMode.Read);
-                var player = new Windows.UI.Xaml.Controls.MediaElement();
-                player.AudioCategory = Windows.UI.Xaml.Media.AudioCategory.Communications;
-                player.AudioDeviceType = Windows.UI.Xaml.Media.AudioDeviceType.Multimedia;
-                player.SetSource(stream, file.ContentType);
-                player.AutoPlay = true;
+                var player = new Windows.Media.Playback.MediaPlayer();
+                player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
+                var source = Windows.Media.Core.MediaSource.CreateFromStream(stream, file.ContentType);
+                player.Source = source;
+                player.Play();
                 player.MediaEnded += (s, ev) => {
-                    item.AudioPlayStatus = "▶";
-                    _currentAudioPlayer = null;
-                    _currentAudioMsgId = 0;
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                        item.AudioPlayStatus = "▶";
+                        _currentAudioPlayer = null;
+                        _currentAudioMsgId = 0;
+                    });
                 };
                 player.MediaFailed += (s, ev) => {
-                    Log("AUDIO MediaFailed: " + ev.ErrorMessage);
-                    item.AudioPlayStatus = "▶";
-                    _currentAudioPlayer = null;
-                    _currentAudioMsgId = 0;
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                        Log("AUDIO MediaFailed: " + ev.ErrorMessage);
+                        item.AudioPlayStatus = "▶";
+                        _currentAudioPlayer = null;
+                        _currentAudioMsgId = 0;
+                    });
                 };
-                // Добавляем в визуальное дерево (невидимый)
+                // MediaPlayer не требует добавления в визуальное дерево
                 AudioPlayerHost.Children.Clear();
-                AudioPlayerHost.Children.Add(player);
                 _currentAudioPlayer = player;
                 _currentAudioMsgId = msgId;
                 item.AudioPlayStatus = "⏹";
