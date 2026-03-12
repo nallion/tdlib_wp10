@@ -78,17 +78,17 @@ namespace TelegramWP10
             };
             InitAsync();
             // Логируем lifecycle приложения для диагностики фонового аудио
-            Application.Current.EnteredBackground += (s, e) => Log("APP EnteredBackground");
+            Application.Current.EnteredBackground += (s, e) => Log("APP EnteredBackground, player=" + (_currentAudioPlayer == null ? "null" : _currentAudioPlayer.PlaybackSession.PlaybackState.ToString()));
             Application.Current.LeavingBackground += (s, e) => Log("APP LeavingBackground");
-            Application.Current.Suspending += (s, e) => Log("APP Suspending");
-            Application.Current.Resuming += (s, e) => Log("APP Resuming");
+            Application.Current.Suspending += (s, e) => Log("APP Suspending, player=" + (_currentAudioPlayer == null ? "null" : _currentAudioPlayer.PlaybackSession.PlaybackState.ToString()));
+            Application.Current.Resuming += (s, e) => Log("APP Resuming, player=" + (_currentAudioPlayer == null ? "null" : _currentAudioPlayer.PlaybackSession.PlaybackState.ToString()));
         }
 
         private async System.Threading.Tasks.Task RequestMediaSessionAsync() {
             _mediaSession?.Dispose();
             _mediaSession = null;
             var session = new Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionSession();
-            session.Reason = Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionReason.MediaPlayback;
+            session.Reason = Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionReason.Unspecified;
             session.Description = "Unogram audio";
             session.Revoked += (s, e) => Log("MEDIA SESSION revoked: " + e.Reason);
             var result = await session.RequestExtensionAsync();
