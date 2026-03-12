@@ -1,14 +1,18 @@
-image: Visual Studio 2017
+image: Visual Studio 2019
+
 platform: ARM
+
 configuration: Release
 
+before_build:
+  - nuget restore TelegramWP10.sln
+
+build:
+  project: TelegramWP10.sln
+  verbosity: minimal
+
 build_script:
-  - dir "C:\Program Files (x86)\Windows Kits\10\bin\"
-  - msbuild TelegramWP10.sln /t:restore
-  # Добавляем флаг вывода в конкретную папку для артефактов
   - msbuild TelegramWP10.sln /p:Configuration=Release /p:Platform=ARM /p:AppxPackageSigningEnabled=false /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxBundle=Never /p:AppxPackageDir="C:\projects\tdlib-wp10\AppPackages" /m
 
-artifacts:
-  # Теперь артефакт будет гарантированно лежать здесь
-  - path: 'AppPackages\**\*.appx'
-    name: Telegram_ARM_Package
+after_build:
+  - ps: Get-ChildItem -Recurse -Filter "*.appx" | % { Push-AppveyorArtifact $_.FullName }

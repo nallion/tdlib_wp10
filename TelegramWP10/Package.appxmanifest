@@ -21,7 +21,7 @@
   <Capabilities>
     <Capability Name="internetClient" />
     <uap:Capability Name="musicLibrary" />
-    <DeviceCapability Name="microphone" />
     <uap3:Capability Name="backgroundMediaPlayback" />
+    <DeviceCapability Name="microphone" />
   </Capabilities>
 </Package>
