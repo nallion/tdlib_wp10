@@ -2,7 +2,7 @@
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">ARM</Platform>
     <ProjectGuid>{4F0E3D1A-9B2C-4E7B-8D5A-6C9F1A2B3C4D}</ProjectGuid>
     <OutputType>AppContainerExe</OutputType>
@@ -11,16 +11,14 @@
     <AssemblyName>TelegramWP10</AssemblyName>
     <DefaultLanguage>ru-RU</DefaultLanguage>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
-    <TargetPlatformVersion>10.0.17763.0</TargetPlatformVersion>
+    <TargetPlatformVersion Condition=" '$(TargetPlatformVersion)' == '' ">10.0.18362.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.10240.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5E7574B-450C-4C53-8BD3-B73C464AFCE0};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
-    
-    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
+    <AppxPackageSigningEnabled>true</AppxPackageSigningEnabled>
     <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
-    <AppxBundle>Never</AppxBundle>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|ARM'">
@@ -46,25 +44,39 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="App.xaml.cs"><DependentUpon>App.xaml</DependentUpon></Compile>
-    <Compile Include="MainPage.xaml.cs"><DependentUpon>MainPage.xaml</DependentUpon></Compile>
+    <Compile Include="App.xaml.cs">
+      <DependentUpon>App.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="MainPage.xaml.cs">
+      <DependentUpon>MainPage.xaml</DependentUpon>
+    </Compile>
     <Compile Include="TdJson.cs" />
     <Compile Include="ChatItem.cs" />
     <Compile Include="MessageItem.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <AppxManifest Include="Package.appxmanifest"><SubType>Designer</SubType></AppxManifest>
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Square150x150Logo.png" />
     <Content Include="Assets\Square44x44Logo.png" />
-    <Content Include="tdjson.dll"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
-    <Content Include="ssleay32.dll"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
-    <Content Include="libeay32.dll"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
-    <Content Include="zlib1.dll"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="tdjson.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="ssleay32.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="libeay32.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="zlib1.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
@@ -80,28 +92,22 @@
 
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
 
-  <Target Name="FinalAppxSigning" AfterTargets="GenerateAppxPackage">
+  <Target Name="AutoSignAppx" AfterTargets="_BundleAppx;GenerateAppx">
     <PropertyGroup>
       <CertFile>$(ProjectDir)MyTempCert.pfx</CertFile>
       <CertPass>12345</CertPass>
-      <SDKBin>C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x86\</SDKBin>
-      <AppxDir>C:\projects\tdlib-wp10\AppPackages</AppxDir>
+      <AppxPath>$(AppxPackageOutput)</AppxPath>
     </PropertyGroup>
 
-    <ItemGroup>
-      <AppxFiles Include="$(AppxDir)\**\*.appx" />
-      <AppxFiles Include="$(AppxDir)\**\*.appxbundle" />
-    </ItemGroup>
+    <Message Importance="High" Text="--- НАЧАЛО ПРОЦЕССА ПОДПИСИ ПАКЕТА ---" />
 
-    <Message Importance="High" Text="--- НАЧАЛО ПРОЦЕССА ПОДПИСИ ---" />
-    
     <Exec Condition="!Exists('$(CertFile)')" 
-          Command="&quot;$(SDKBin)makecert.exe&quot; -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)Temp.cer&quot; &amp;&amp; &quot;$(SDKBin)pvk2pfx.exe&quot; -pvk &quot;$(ProjectDir)Temp.pvk&quot; -spc &quot;$(ProjectDir)Temp.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" />
-
-    <Message Importance="High" Text="Подписываю файл: %(AppxFiles.FullPath)" Condition="'@(AppxFiles)' != ''" />
-    <Exec Command="&quot;$(SDKBin)signtool.exe&quot; sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;%(AppxFiles.FullPath)&quot;" 
-          Condition="'@(AppxFiles)' != ''" />
+          Command="MakeCert.exe -r -pe -n &quot;CN=TelegramWP10&quot; -eku 1.3.6.1.5.5.7.3.3 -ss My -len 2048 -sky exchange &quot;$(ProjectDir)TempCert.cer&quot; &amp;&amp; Pvk2Pfx.exe -pvk &quot;$(ProjectDir)TempCert.pvk&quot; -spc &quot;$(ProjectDir)TempCert.cer&quot; -pfx &quot;$(CertFile)&quot; -pi $(CertPass)" 
+          IgnoreExitCode="true" />
     
-    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА (Файлов: @(AppxFiles->Count())) ---" />
+    <Exec Condition="Exists('$(AppxPath)')"
+          Command="SignTool.exe sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;$(AppxPath)&quot;" />
+    
+    <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА: $(AppxPath) ---" />
   </Target>
 </Project>
