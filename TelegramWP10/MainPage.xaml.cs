@@ -1140,6 +1140,7 @@ namespace TelegramWP10
                 long editId = _editingMessageId;
                 _editingMessageId = 0;
                 SendButton.Content = "➤";
+                Log("SEND EDIT msgId=" + editId + " chatId=" + _currentChatId + " text=" + text);
                 JObject req = new JObject {
                     ["@type"] = "editMessageText",
                     ["chat_id"] = _currentChatId,
@@ -1604,11 +1605,12 @@ namespace TelegramWP10
             var msg = _selectedMessageForCopy;
             _selectedMessageForCopy = null;
             if (string.IsNullOrEmpty(msg.Text)) return;
-            // Заполняем поле ввода текстом и запоминаем редактируемое сообщение
+            if (!msg.IsOutgoing) return; // редактировать можно только свои сообщения
             MessageInput.Text = msg.Text;
             MessageInput.SelectionStart = msg.Text.Length;
             _editingMessageId = msg.Id;
-            SendButton.Content = "✓"; // визуальный индикатор режима редактирования
+            SendButton.Content = "✓";
+            Log("EDIT MODE msgId=" + msg.Id + " text=" + msg.Text);
         }
 
         private long _editingMessageId = 0;
