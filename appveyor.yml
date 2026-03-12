@@ -1,4 +1,4 @@
-image: Visual Studio 2019
+image: Visual Studio 2017
 
 platform: ARM
 
@@ -10,9 +10,6 @@ before_build:
 build:
   project: TelegramWP10.sln
   verbosity: minimal
-
-build_script:
-  - msbuild TelegramWP10.sln /p:Configuration=Release /p:Platform=ARM /p:AppxPackageSigningEnabled=false /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxBundle=Never /p:AppxPackageDir="C:\projects\tdlib-wp10\AppPackages" /m
 
 after_build:
   - ps: Get-ChildItem -Recurse -Filter "*.appx" | % { Push-AppveyorArtifact $_.FullName }
