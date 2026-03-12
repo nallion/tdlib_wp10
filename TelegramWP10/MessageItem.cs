@@ -1,9 +1,23 @@
 using System.ComponentModel;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Media.Imaging;
 
 namespace TelegramWP10
 {
+    public class InlineButton
+    {
+        public string Text { get; set; }
+        public string CallbackData { get; set; } // null если не callback
+        public string Url { get; set; }          // null если не url
+    }
+
+    public class InlineButtonRow
+    {
+        public List<InlineButton> Buttons { get; set; } = new List<InlineButton>();
+    }
+
     public class MessageItem : INotifyPropertyChanged
     {
         public long Id { get; set; }
@@ -73,6 +87,11 @@ namespace TelegramWP10
         public string AudioTitle { get => _audioTitle; set { _audioTitle = value; OnPropertyChanged("AudioTitle"); } }
         public string AudioPlayStatus { get => _audioPlayStatus; set { _audioPlayStatus = value; OnPropertyChanged("AudioPlayStatus"); } }
         public Visibility AudioVisibility => _isAudio ? Visibility.Visible : Visibility.Collapsed;
+
+        // Inline-кнопки
+        private ObservableCollection<InlineButtonRow> _inlineButtons = new ObservableCollection<InlineButtonRow>();
+        public ObservableCollection<InlineButtonRow> InlineButtons { get => _inlineButtons; set { _inlineButtons = value; OnPropertyChanged("InlineButtons"); OnPropertyChanged("InlineButtonsVisibility"); } }
+        public Visibility InlineButtonsVisibility => _inlineButtons != null && _inlineButtons.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

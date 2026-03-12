@@ -758,6 +758,30 @@ namespace TelegramWP10
                 if (reactions != null && reactions.Count > 0)
                     item.Reactions = BuildReactionsString(reactions);
 
+                // Inline-кнопки
+                var markup = msg["reply_markup"];
+                if (markup != null && markup["@type"]?.ToString() == "replyMarkupInlineKeyboard") {
+                    var rows = markup["rows"] as JArray;
+                    if (rows != null) {
+                        var buttonRows = new System.Collections.ObjectModel.ObservableCollection<InlineButtonRow>();
+                        foreach (var row in rows) {
+                            var btnRow = new InlineButtonRow();
+                            foreach (var btn in row as JArray ?? new JArray()) {
+                                string bType = btn["type"]?["@type"]?.ToString() ?? "";
+                                btnRow.Buttons.Add(new InlineButton {
+                                    Text = btn["text"]?.ToString() ?? "",
+                                    CallbackData = bType == "inlineKeyboardButtonTypeCallback"
+                                        ? btn["type"]?["data"]?.ToString() : null,
+                                    Url = bType == "inlineKeyboardButtonTypeUrl"
+                                        ? btn["type"]?["url"]?.ToString() : null,
+                                });
+                            }
+                            if (btnRow.Buttons.Count > 0) buttonRows.Add(btnRow);
+                        }
+                        item.InlineButtons = buttonRows;
+                    }
+                }
+
                 if (type == "messagePhoto") {
                     var sizes = content["photo"]?["sizes"] as JArray;
                     if (sizes != null && sizes.Count > 0) {
@@ -1290,6 +1314,34 @@ namespace TelegramWP10
             if (border == null) return;
             _selectedMessageForCopy = border.DataContext as MessageItem;
             FlyoutBase.ShowAttachedFlyout(border);
+        }
+
+        private async void InlineButton_Click(object sender, RoutedEventArgs e) {
+            var btn = (sender as Windows.UI.Xaml.Controls.Button)?.Tag as InlineButton;
+            if (btn == null) return;
+
+            if (!string.IsNullOrEmpty(btn.Url)) {
+                await Windows.System.Launcher.LaunchUriAsync(new Uri(btn.Url));
+                return;
+            }
+            if (!string.IsNullOrEmpty(btn.CallbackData)) {
+                // Найти msgId через Tag кнопки — он хранится в Tag как long через parent
+                var button = sender as Windows.UI.Xaml.Controls.Button;
+                // Идём вверх по визуальному дереву до Border с DataContext = MessageItem
+                DependencyObject el = button;
+                MessageItem msgItem = null;
+                while (el != null) {
+                    if (el is FrameworkElement fe && fe.DataContext is MessageItem mi) { msgItem = mi; break; }
+                    el = Windows.UI.Xaml.Media.VisualTreeHelper.GetParent(el);
+                }
+                if (msgItem == null) return;
+                string payload = "{\"@type\":\"getCallbackQueryAnswer\","
+                    + "\"chat_id\":" + _currentChatId + ","
+                    + "\"message_id\":" + msgItem.Id + ","
+                    + "\"payload\":{\"@type\":\"callbackQueryPayloadData\","
+                    + "\"data\":\"" + btn.CallbackData + "\"}}";
+                TdJson.SendUtf8(_client, payload);
+            }
         }
 
         private void CopyMessage_Click(object sender, RoutedEventArgs e) {

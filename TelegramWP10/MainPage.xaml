@@ -206,6 +206,35 @@
                                 <Border Visibility="{Binding ReactionsVisibility}" Background="#22FFFFFF" CornerRadius="10" Padding="6,3" Margin="0,4,0,0" HorizontalAlignment="Left">
                                     <TextBlock Text="{Binding Reactions}" FontSize="14"/>
                                 </Border>
+                                <!-- Inline-кнопки -->
+                                <ItemsControl ItemsSource="{Binding InlineButtons}" Visibility="{Binding InlineButtonsVisibility}" Margin="0,6,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                <ItemsControl ItemsSource="{Binding Buttons}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Orientation="Horizontal"/>
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Button Content="{Binding Text}"
+                                                                    Tag="{Binding}"
+                                                                    Click="InlineButton_Click"
+                                                                    Margin="0,0,4,0"
+                                                                    Padding="10,5"
+                                                                    Background="#2A6496"
+                                                                    Foreground="White"
+                                                                    FontSize="12"
+                                                                    MinWidth="60"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
                         </Border>
                     </DataTemplate>
