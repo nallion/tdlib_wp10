@@ -44,6 +44,8 @@ namespace TelegramWP10
         private Windows.Media.Playback.MediaPlayer _currentAudioPlayer = null;
         private long _currentAudioMsgId = 0;
         private Windows.Media.Core.MediaSource _currentAudioSource = null;
+        private TimeSpan _currentAudioPosition = TimeSpan.Zero;
+        private string _currentAudioFilePath = null;
         private Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionSession _mediaSession = null;
         private long _pendingDeleteChatId = 0;
         private StorageFolder _filesFolder = null;
@@ -83,6 +85,7 @@ namespace TelegramWP10
                     item.AudioPosition = session.Position.TotalSeconds;
                     var pos = session.Position;
                     item.AudioPositionText = $"{(int)pos.TotalMinutes}:{pos.Seconds:D2}";
+                    _currentAudioPosition = session.Position; // сохраняем для восстановления после resume
                 }
             };
             _audioPositionTimer.Start();
@@ -98,8 +101,44 @@ namespace TelegramWP10
             // Логируем lifecycle приложения для диагностики фонового аудио
             Application.Current.EnteredBackground += (s, e) => Log("APP EnteredBackground, player=" + (_currentAudioPlayer == null ? "null" : _currentAudioPlayer.PlaybackSession.PlaybackState.ToString()));
             Application.Current.LeavingBackground += (s, e) => Log("APP LeavingBackground");
-            Application.Current.Suspending += (s, e) => Log("APP Suspending, player=" + (_currentAudioPlayer == null ? "null" : _currentAudioPlayer.PlaybackSession.PlaybackState.ToString()));
-            Application.Current.Resuming += (s, e) => Log("APP Resuming, player=" + (_currentAudioPlayer == null ? "null" : _currentAudioPlayer.PlaybackSession.PlaybackState.ToString()));
+            Application.Current.Suspending += (s, e) => {
+                Log("APP Suspending, player=" + (_currentAudioPlayer == null ? "null" : _currentAudioPlayer.PlaybackSession.PlaybackState.ToString()));
+                // Сохраняем позицию на случай если плеер упадёт после resume
+                if (_currentAudioPlayer != null)
+                    _currentAudioPosition = _currentAudioPlayer.PlaybackSession.Position;
+            };
+            Application.Current.Resuming += async (s, e) => {
+                Log("APP Resuming, player=" + (_currentAudioPlayer == null ? "null" : _currentAudioPlayer.PlaybackSession.PlaybackState.ToString()));
+                // Если плеер упал во время suspend — восстанавливаем
+                await System.Threading.Tasks.Task.Delay(1500); // ждём пока AUDIO FAILED придёт
+                Log("APP Resuming check, player=" + (_currentAudioPlayer == null ? "null" : _currentAudioPlayer.PlaybackSession.PlaybackState.ToString()));
+                if (_currentAudioPlayer == null && _currentAudioFilePath != null && _messagesDict.ContainsKey(_currentAudioMsgId)) {
+                    Log("APP Resuming: восстанавливаем плеер pos=" + _currentAudioPosition.TotalSeconds);
+                    var savedMsgId = _currentAudioMsgId;
+                    var savedPos = _currentAudioPosition;
+                    var savedPath = _currentAudioFilePath;
+                    await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () => {
+                        try {
+                            var item = _messagesDict[savedMsgId];
+                            var player = new Windows.Media.Playback.MediaPlayer();
+                            player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
+                            var source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(savedPath));
+                            _currentAudioSource = source;
+                            player.Source = source;
+                            _currentAudioPlayer = player;
+                            _currentAudioMsgId = savedMsgId;
+                            SetupPlayer(player, item, savedPos);
+                            player.Play();
+                            Log("APP Resuming: плеер восстановлен");
+                        } catch (Exception ex) {
+                            Log("APP Resuming: ошибка восстановления: " + ex.Message);
+                            _currentAudioPlayer = null;
+                            _currentAudioSource = null;
+                            _currentAudioFilePath = null;
+                        }
+                    });
+                }
+            };
         }
 
         private async System.Threading.Tasks.Task RequestMediaSessionAsync() {
@@ -1200,96 +1239,92 @@ namespace TelegramWP10
                 return;
             }
             try {
-                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(item.FilePath);
                 var player = new Windows.Media.Playback.MediaPlayer();
                 player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
-                var source = Windows.Media.Core.MediaSource.CreateFromStorageFile(file);
+                // CreateFromUri не держит файловый хэндл — не падает после suspend/resume
+                var source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(item.FilePath));
                 _currentAudioSource = source;
                 player.Source = source;
 
                 // CommandManager ВКЛЮЧЁН — он регистрирует плеер в системном медиапайплайне
                 // и обеспечивает появление плеера на экране блокировки. Не отключать!
-                // CommandManager сам синхронизирует smtc.PlaybackStatus при Play/Pause.
-
-                // Настраиваем отображение на экране блокировки
-                var smtc = player.SystemMediaTransportControls;
-                smtc.IsEnabled = true;
-                smtc.IsPlayEnabled = true;
-                smtc.IsPauseEnabled = true;
-                smtc.IsStopEnabled = false;
-                smtc.IsNextEnabled = false;
-                smtc.IsPreviousEnabled = false;
-                smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
-                smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
-                smtc.DisplayUpdater.Update();
-
-                // Перемотка с экрана блокировки — CommandManager не обрабатывает, делаем сами
-                smtc.PlaybackPositionChangeRequested += (ss, ee) => {
-                    player.PlaybackSession.Position = ee.RequestedPlaybackPosition;
-                };
-
-                // Прогресс-бар на экране блокировки
-                player.PlaybackSession.PositionChanged += (session, args) => {
-                    smtc.UpdateTimelineProperties(new Windows.Media.SystemMediaTransportControlsTimelineProperties {
-                        StartTime = TimeSpan.Zero,
-                        MinSeekTime = TimeSpan.Zero,
-                        Position = session.Position,
-                        MaxSeekTime = session.NaturalDuration,
-                        EndTime = session.NaturalDuration
-                    });
-                };
-
-                // Синхронизируем иконку в пузыре с реальным состоянием плеера
-                // (Play/Pause могут прийти с экрана блокировки через CommandManager)
-                player.PlaybackSession.PlaybackStateChanged += (session, args) => {
-                    Log("AUDIO STATE: " + session.PlaybackState);
-                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                        if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing)
-                            item.AudioPlayStatus = "⏹";
-                        else if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused)
-                            item.AudioPlayStatus = "▶";
-                    });
-                };
-
-                player.MediaOpened += (s, ev) => {
-                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                        var dur = player.PlaybackSession.NaturalDuration;
-                        if (dur.TotalSeconds > 0) item.AudioDurationSeconds = dur.TotalSeconds;
-                        Log("AUDIO OPENED ok dur=" + dur.TotalSeconds);
-                    });
-                };
+                SetupPlayer(player, item, TimeSpan.Zero);
 
                 player.Play();
                 Log("AUDIO Play() called, state=" + player.PlaybackSession.PlaybackState);
-                player.MediaEnded += (s, ev) => {
-                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                        Log("AUDIO ENDED");
-                        item.AudioPlayStatus = "▶";
-                        _currentAudioPlayer = null;
-                        _currentAudioSource = null;
-                        _currentAudioMsgId = 0;
-                        ReleaseMediaSession();
-                    });
-                };
-                player.MediaFailed += (s, ev) => {
-                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                        Log("AUDIO FAILED: " + ev.ErrorMessage);
-                        item.AudioPlayStatus = "▶";
-                        _currentAudioPlayer = null;
-                        _currentAudioSource = null;
-                        _currentAudioMsgId = 0;
-                        ReleaseMediaSession();
-                    });
-                };
                 AudioPlayerHost.Children.Clear();
                 _currentAudioPlayer = player;
                 _currentAudioMsgId = msgId;
                 item.AudioPlayStatus = "⏹";
                 Log("AUDIO playing: " + item.FilePath);
+                _currentAudioFilePath = item.FilePath;
+                _currentAudioPosition = TimeSpan.Zero;
                 await RequestMediaSessionAsync();
             } catch (Exception ex) {
                 Log("AUDIO PLAY ERR: " + ex.GetType().Name + " — " + ex.Message);
             }
+        }
+
+        // Настройка SMTC и обработчиков событий плеера. Вызывается и при старте, и при восстановлении после suspend.
+        private void SetupPlayer(Windows.Media.Playback.MediaPlayer player, MessageItem item, TimeSpan startPosition) {
+            var smtc = player.SystemMediaTransportControls;
+            smtc.IsEnabled = true;
+            smtc.IsPlayEnabled = true;
+            smtc.IsPauseEnabled = true;
+            smtc.IsStopEnabled = false;
+            smtc.IsNextEnabled = false;
+            smtc.IsPreviousEnabled = false;
+            smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
+            smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
+            smtc.DisplayUpdater.Update();
+            smtc.PlaybackPositionChangeRequested += (ss, ee) => {
+                player.PlaybackSession.Position = ee.RequestedPlaybackPosition;
+            };
+            player.PlaybackSession.PositionChanged += (session, args) => {
+                smtc.UpdateTimelineProperties(new Windows.Media.SystemMediaTransportControlsTimelineProperties {
+                    StartTime = TimeSpan.Zero, MinSeekTime = TimeSpan.Zero,
+                    Position = session.Position,
+                    MaxSeekTime = session.NaturalDuration,
+                    EndTime = session.NaturalDuration
+                });
+            };
+            player.PlaybackSession.PlaybackStateChanged += (session, args) => {
+                Log("AUDIO STATE: " + session.PlaybackState);
+                var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                    if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing)
+                        item.AudioPlayStatus = "⏹";
+                    else if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused)
+                        item.AudioPlayStatus = "▶";
+                });
+            };
+            player.MediaOpened += (s, ev) => {
+                var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                    if (startPosition > TimeSpan.Zero)
+                        player.PlaybackSession.Position = startPosition;
+                    var dur = player.PlaybackSession.NaturalDuration;
+                    if (dur.TotalSeconds > 0) item.AudioDurationSeconds = dur.TotalSeconds;
+                    Log("AUDIO OPENED ok dur=" + dur.TotalSeconds + " pos=" + startPosition.TotalSeconds);
+                });
+            };
+            player.MediaEnded += (s, ev) => {
+                var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                    Log("AUDIO ENDED");
+                    item.AudioPlayStatus = "▶";
+                    _currentAudioPlayer = null; _currentAudioSource = null;
+                    _currentAudioMsgId = 0; _currentAudioFilePath = null;
+                    ReleaseMediaSession();
+                });
+            };
+            player.MediaFailed += (s, ev) => {
+                var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                    Log("AUDIO FAILED: " + ev.ErrorMessage);
+                    item.AudioPlayStatus = "▶";
+                    _currentAudioPlayer = null; _currentAudioSource = null;
+                    _currentAudioMsgId = 0;
+                    // НЕ сбрасываем _currentAudioFilePath — нужен для восстановления в Resuming
+                    ReleaseMediaSession();
+                });
+            };
         }
 
         private async void MicButton_PointerPressed(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e) {
