@@ -305,10 +305,11 @@
                           HorizontalScrollMode="Enabled" VerticalScrollMode="Enabled"
                           HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                <Image x:Name="PhotoOverlayImage" Stretch="Uniform"
-                       Width="{Binding ActualWidth, ElementName=PhotoOverlay}"
-                       Height="{Binding ActualHeight, ElementName=PhotoOverlay}"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Grid Width="{Binding ActualWidth, ElementName=PhotoOverlay}"
+                      Height="{Binding ActualHeight, ElementName=PhotoOverlay}">
+                    <Image x:Name="PhotoOverlayImage" Stretch="Uniform"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
             </ScrollViewer>
             <Button Content="✕" Click="PhotoOverlay_Tapped"
                     HorizontalAlignment="Right" VerticalAlignment="Top"
