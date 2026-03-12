@@ -1151,6 +1151,9 @@ namespace TelegramWP10
                     }
                 };
                 TdJson.SendUtf8(_client, req.ToString());
+                // Обновляем UI сразу — не ждём updateMessageEdited (он не содержит нового текста)
+                if (_messagesDict.ContainsKey(editId))
+                    _messagesDict[editId].Text = text;
                 return;
             }
 
