@@ -41,7 +41,7 @@ namespace TelegramWP10
         private Windows.Storage.StorageFile _recordingFile = null;
         private Windows.Media.Playback.MediaPlayer _currentAudioPlayer = null;
         private long _currentAudioMsgId = 0;
-        private Windows.ApplicationModel.ExtendedExecution.Foreground.ExtendedExecutionForegroundSession _mediaSession = null;
+        private Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionSession _mediaSession = null;
         private long _pendingDeleteChatId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
@@ -87,13 +87,13 @@ namespace TelegramWP10
         private async System.Threading.Tasks.Task RequestMediaSessionAsync() {
             _mediaSession?.Dispose();
             _mediaSession = null;
-            var session = new Windows.ApplicationModel.ExtendedExecution.Foreground.ExtendedExecutionForegroundSession();
-            session.Reason = Windows.ApplicationModel.ExtendedExecution.Foreground.ExtendedExecutionForegroundReason.MediaPlayback;
+            var session = new Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionSession();
+            session.Reason = Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionReason.MediaPlayback;
             session.Description = "Unogram audio";
             session.Revoked += (s, e) => Log("MEDIA SESSION revoked: " + e.Reason);
             var result = await session.RequestExtensionAsync();
             Log("MEDIA SESSION result: " + result);
-            if (result == Windows.ApplicationModel.ExtendedExecution.Foreground.ExtendedExecutionForegroundResult.Allowed)
+            if (result == Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionResult.Allowed)
                 _mediaSession = session;
             else
                 session.Dispose();
