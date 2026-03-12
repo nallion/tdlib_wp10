@@ -1203,7 +1203,7 @@ namespace TelegramWP10
             TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + item.FullPhotoFileId + ",\"priority\":32,\"synchronous\":false}");
         }
 
-        private void PhotoOverlay_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e) {
+        private void PhotoOverlay_Tapped(object sender, RoutedEventArgs e) {
             PhotoOverlay.Visibility = Visibility.Collapsed;
             PhotoOverlayImage.Source = null;
             _fullPhotoMsgId = 0;
