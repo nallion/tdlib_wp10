@@ -41,7 +41,6 @@ namespace TelegramWP10
         private Windows.Storage.StorageFile _recordingFile = null;
         private Windows.Media.Playback.MediaPlayer _currentAudioPlayer = null;
         private long _currentAudioMsgId = 0;
-        private Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionSession _audioSession = null;
         private long _pendingDeleteChatId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
@@ -77,23 +76,6 @@ namespace TelegramWP10
                 }
             };
             InitAsync();
-        }
-
-        private async System.Threading.Tasks.Task RequestAudioSessionAsync() {
-            ReleaseAudioSession();
-            var session = new Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionSession();
-            session.Reason = Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionReason.Unspecified;
-            session.Description = "Audio playback";
-            session.Revoked += (s, e) => { _audioSession = null; };
-            var result = await session.RequestExtensionAsync();
-            if (result == Windows.ApplicationModel.ExtendedExecution.ExtendedExecutionResult.Allowed)
-                _audioSession = session;
-            else
-                session.Dispose();
-        }
-        private void ReleaseAudioSession() {
-            _audioSession?.Dispose();
-            _audioSession = null;
         }
 
         private async void Log(string m) {
@@ -1160,9 +1142,11 @@ namespace TelegramWP10
                 var stream = await file.OpenAsync(Windows.Storage.FileAccessMode.Read);
                 var player = new Windows.Media.Playback.MediaPlayer();
                 player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
+                // CommandManager должен быть ВКЛЮЧЁН — он регистрирует плеер в системном медиапайплайне
+                // именно это позволяет аудио играть в фоне и на экране блокировки
                 var source = Windows.Media.Core.MediaSource.CreateFromStream(stream, file.ContentType);
                 player.Source = source;
-                // Подключаем SystemMediaTransportControls — без этого фоновое воспроизведение не работает
+                // Настраиваем SMTC для отображения на экране блокировки
                 var smtc = player.SystemMediaTransportControls;
                 smtc.IsEnabled = true;
                 smtc.IsPlayEnabled = true;
@@ -1170,21 +1154,12 @@ namespace TelegramWP10
                 smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
                 smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
                 smtc.DisplayUpdater.Update();
-                smtc.ButtonPressed += (ss, ee) => {
-                    if (ee.Button == Windows.Media.SystemMediaTransportControlsButton.Pause ||
-                        ee.Button == Windows.Media.SystemMediaTransportControlsButton.Stop)
-                        player.Pause();
-                    else if (ee.Button == Windows.Media.SystemMediaTransportControlsButton.Play)
-                        player.Play();
-                };
-                player.CommandManager.IsEnabled = false; // отключаем дефолтный командный менеджер
                 player.Play();
                 player.MediaEnded += (s, ev) => {
                     var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
                         _currentAudioMsgId = 0;
-                        ReleaseAudioSession();
                     });
                 };
                 player.MediaFailed += (s, ev) => {
@@ -1193,17 +1168,13 @@ namespace TelegramWP10
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
                         _currentAudioMsgId = 0;
-                        ReleaseAudioSession();
                     });
                 };
-                // MediaPlayer не требует добавления в визуальное дерево
                 AudioPlayerHost.Children.Clear();
                 _currentAudioPlayer = player;
                 _currentAudioMsgId = msgId;
                 item.AudioPlayStatus = "⏹";
                 Log("AUDIO playing: " + item.FilePath);
-                // Запрашиваем расширенную сессию чтобы не замолкать при сворачивании
-                await RequestAudioSessionAsync();
             } catch (Exception ex) {
                 Log("AUDIO PLAY ERR: " + ex.GetType().Name + " — " + ex.Message);
             }
