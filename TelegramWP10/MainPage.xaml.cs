@@ -1139,12 +1139,10 @@ namespace TelegramWP10
             }
             try {
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(item.FilePath);
-                var stream = await file.OpenAsync(Windows.Storage.FileAccessMode.Read);
                 var player = new Windows.Media.Playback.MediaPlayer();
                 player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
-                // CommandManager должен быть ВКЛЮЧЁН — он регистрирует плеер в системном медиапайплайне
-                // именно это позволяет аудио играть в фоне и на экране блокировки
-                var source = Windows.Media.Core.MediaSource.CreateFromStream(stream, file.ContentType);
+                // CreateFromStorageFile — не требует stream, источник живёт пока жив player
+                var source = Windows.Media.Core.MediaSource.CreateFromStorageFile(file);
                 player.Source = source;
                 // Настраиваем SMTC для отображения на экране блокировки
                 var smtc = player.SystemMediaTransportControls;
