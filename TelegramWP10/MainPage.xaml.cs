@@ -1058,6 +1058,8 @@ namespace TelegramWP10
                         item.Text = "[" + type.Replace("message", "") + "]";
                     }
                 }
+                // Всегда регистрируем в словаре — нужно для редактирования и обновлений
+                _messagesDict[msgId] = item;
                 return item;
             } catch (Exception ex) { Log("ParseMessage ERR: " + ex.Message); return null; }
         }
