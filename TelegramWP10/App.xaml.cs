@@ -11,10 +11,13 @@ namespace TelegramWP10 {
         }
 
         private async void App_EnteredBackground(object sender, Windows.ApplicationModel.EnteredBackgroundEventArgs e) {
+            // Держим процесс живым пока MediaPlayer активен
             var deferral = e.GetDeferral();
             try {
-                // Даём системе время на регистрацию MediaPlayer как активного аудио источника
-                await System.Threading.Tasks.Task.Delay(100);
+                await System.Threading.Tasks.Task.Run(async () => {
+                    // Даём системе время зарегистрировать MediaPlayer как фоновый источник
+                    await System.Threading.Tasks.Task.Delay(2000);
+                });
             } finally {
                 deferral.Complete();
             }
