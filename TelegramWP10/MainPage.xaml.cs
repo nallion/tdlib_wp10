@@ -41,6 +41,7 @@ namespace TelegramWP10
         private Windows.Storage.StorageFile _recordingFile = null;
         private Windows.Media.Playback.MediaPlayer _currentAudioPlayer = null;
         private long _currentAudioMsgId = 0;
+        private Windows.ApplicationModel.ExtendedExecution.Foreground.ExtendedExecutionForegroundSession _mediaSession = null;
         private long _pendingDeleteChatId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
@@ -81,6 +82,25 @@ namespace TelegramWP10
             Application.Current.LeavingBackground += (s, e) => Log("APP LeavingBackground");
             Application.Current.Suspending += (s, e) => Log("APP Suspending");
             Application.Current.Resuming += (s, e) => Log("APP Resuming");
+        }
+
+        private async System.Threading.Tasks.Task RequestMediaSessionAsync() {
+            _mediaSession?.Dispose();
+            _mediaSession = null;
+            var session = new Windows.ApplicationModel.ExtendedExecution.Foreground.ExtendedExecutionForegroundSession();
+            session.Reason = Windows.ApplicationModel.ExtendedExecution.Foreground.ExtendedExecutionForegroundReason.MediaPlayback;
+            session.Description = "Unogram audio";
+            session.Revoked += (s, e) => Log("MEDIA SESSION revoked: " + e.Reason);
+            var result = await session.RequestExtensionAsync();
+            Log("MEDIA SESSION result: " + result);
+            if (result == Windows.ApplicationModel.ExtendedExecution.Foreground.ExtendedExecutionForegroundResult.Allowed)
+                _mediaSession = session;
+            else
+                session.Dispose();
+        }
+        private void ReleaseMediaSession() {
+            _mediaSession?.Dispose();
+            _mediaSession = null;
         }
 
         private async void Log(string m) {
@@ -1129,6 +1149,7 @@ namespace TelegramWP10
                 _currentAudioPlayer = null;
                 item.AudioPlayStatus = "▶";
                 _currentAudioMsgId = 0;
+                ReleaseMediaSession();
                 return;
             }
             // Остановить предыдущий
@@ -1137,6 +1158,7 @@ namespace TelegramWP10
                 if (_messagesDict.ContainsKey(_currentAudioMsgId))
                     _messagesDict[_currentAudioMsgId].AudioPlayStatus = "▶";
                 _currentAudioPlayer = null;
+                ReleaseMediaSession();
             }
             if (string.IsNullOrEmpty(item.FilePath)) {
                 Log("AUDIO no file yet — download not ready");
@@ -1172,6 +1194,7 @@ namespace TelegramWP10
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
                         _currentAudioMsgId = 0;
+                        ReleaseMediaSession();
                     });
                 };
                 player.MediaFailed += (s, ev) => {
@@ -1180,6 +1203,7 @@ namespace TelegramWP10
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
                         _currentAudioMsgId = 0;
+                        ReleaseMediaSession();
                     });
                 };
                 AudioPlayerHost.Children.Clear();
@@ -1187,6 +1211,7 @@ namespace TelegramWP10
                 _currentAudioMsgId = msgId;
                 item.AudioPlayStatus = "⏹";
                 Log("AUDIO playing: " + item.FilePath);
+                await RequestMediaSessionAsync();
             } catch (Exception ex) {
                 Log("AUDIO PLAY ERR: " + ex.GetType().Name + " — " + ex.Message);
             }
