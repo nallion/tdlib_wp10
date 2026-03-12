@@ -1206,6 +1206,12 @@ namespace TelegramWP10
                 var source = Windows.Media.Core.MediaSource.CreateFromStorageFile(file);
                 _currentAudioSource = source;
                 player.Source = source;
+
+                // CommandManager ВКЛЮЧЁН — он регистрирует плеер в системном медиапайплайне
+                // и обеспечивает появление плеера на экране блокировки. Не отключать!
+                // CommandManager сам синхронизирует smtc.PlaybackStatus при Play/Pause.
+
+                // Настраиваем отображение на экране блокировки
                 var smtc = player.SystemMediaTransportControls;
                 smtc.IsEnabled = true;
                 smtc.IsPlayEnabled = true;
@@ -1216,27 +1222,13 @@ namespace TelegramWP10
                 smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
                 smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
                 smtc.DisplayUpdater.Update();
-                smtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Playing;
-                // CommandManager отключаем — иначе он сам обрабатывает команды системы и паузит
-                player.CommandManager.IsEnabled = false;
-                // Кнопки с экрана блокировки
-                smtc.ButtonPressed += (ss, ee) => {
-                    switch (ee.Button) {
-                        case Windows.Media.SystemMediaTransportControlsButton.Play:
-                            player.Play();
-                            smtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Playing;
-                            break;
-                        case Windows.Media.SystemMediaTransportControlsButton.Pause:
-                            player.Pause();
-                            smtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Paused;
-                            break;
-                    }
-                };
-                // Перемотка с экрана блокировки
+
+                // Перемотка с экрана блокировки — CommandManager не обрабатывает, делаем сами
                 smtc.PlaybackPositionChangeRequested += (ss, ee) => {
                     player.PlaybackSession.Position = ee.RequestedPlaybackPosition;
                 };
-                // Обновляем позицию в SMTC (для прогресс-бара на экране блокировки)
+
+                // Прогресс-бар на экране блокировки
                 player.PlaybackSession.PositionChanged += (session, args) => {
                     smtc.UpdateTimelineProperties(new Windows.Media.SystemMediaTransportControlsTimelineProperties {
                         StartTime = TimeSpan.Zero,
@@ -1246,15 +1238,19 @@ namespace TelegramWP10
                         EndTime = session.NaturalDuration
                     });
                 };
-                // Если система паузит не через наш ButtonPressed — возобновляем
+
+                // Синхронизируем иконку в пузыре с реальным состоянием плеера
+                // (Play/Pause могут прийти с экрана блокировки через CommandManager)
                 player.PlaybackSession.PlaybackStateChanged += (session, args) => {
                     Log("AUDIO STATE: " + session.PlaybackState);
-                    if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused &&
-                        smtc.PlaybackStatus == Windows.Media.MediaPlaybackStatus.Playing) {
-                        player.Play();
-                        Log("AUDIO force-resumed after unexpected pause");
-                    }
+                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                        if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing)
+                            item.AudioPlayStatus = "⏹";
+                        else if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused)
+                            item.AudioPlayStatus = "▶";
+                    });
                 };
+
                 player.MediaOpened += (s, ev) => {
                     var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                         var dur = player.PlaybackSession.NaturalDuration;
@@ -1262,6 +1258,7 @@ namespace TelegramWP10
                         Log("AUDIO OPENED ok dur=" + dur.TotalSeconds);
                     });
                 };
+
                 player.Play();
                 Log("AUDIO Play() called, state=" + player.PlaybackSession.PlaybackState);
                 player.MediaEnded += (s, ev) => {
