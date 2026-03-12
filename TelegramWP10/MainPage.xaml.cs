@@ -825,7 +825,7 @@ namespace TelegramWP10
                 var entitiesJson = type == "messageText"
                     ? content["text"]?["entities"] as Newtonsoft.Json.Linq.JArray
                     : content["caption"]?["entities"] as Newtonsoft.Json.Linq.JArray;
-                var entities = new List<(int, int, string)>();
+                var entities = new List<MessageEntity>();
                 if (entitiesJson != null) {
                     foreach (var ent in entitiesJson) {
                         string eType = ent["type"]?["@type"]?.ToString() ?? "";
@@ -836,7 +836,7 @@ namespace TelegramWP10
                             url = txt.Substring(Math.Max(0, offset), Math.Min(length, txt.Length - offset));
                         else if (eType == "textEntityTypeTextUrl")
                             url = ent["type"]?["url"]?.ToString();
-                        if (url != null) entities.Add((offset, length, url));
+                        if (url != null) entities.Add(new MessageEntity { Offset = offset, Length = length, Url = url });
                     }
                 }
 
@@ -1232,7 +1232,9 @@ namespace TelegramWP10
                 int pos = 0;
                 // сортируем по offset на случай неупорядоченности
                 var sorted = item.Entities.OrderBy(x => x.Offset).ToList();
-                foreach (var (offset, length, url) in sorted) {
+                foreach (var ent in sorted) {
+                    int offset = ent.Offset, length = ent.Length;
+                    string url = ent.Url;
                     if (offset > pos)
                         para.Inlines.Add(new Windows.UI.Xaml.Documents.Run { Text = text.Substring(pos, offset - pos) });
                     int safeLen = Math.Min(length, text.Length - offset);

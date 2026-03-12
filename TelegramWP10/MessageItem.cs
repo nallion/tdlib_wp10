@@ -18,6 +18,12 @@ namespace TelegramWP10
         public List<InlineButton> Buttons { get; set; } = new List<InlineButton>();
     }
 
+    public class MessageEntity {
+        public int Offset { get; set; }
+        public int Length { get; set; }
+        public string Url { get; set; }
+    }
+
     public class MessageItem : INotifyPropertyChanged
     {
         public long Id { get; set; }
@@ -106,8 +112,8 @@ namespace TelegramWP10
 
         // Полный file_id фото для загрузки полноразмерной версии
         public long FullPhotoFileId { get; set; }
-        // Entities для ссылок (offset, length, url)
-        public List<(int Offset, int Length, string Url)> Entities { get; set; }
+        // Entities для ссылок
+        public List<MessageEntity> Entities { get; set; }
 
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
