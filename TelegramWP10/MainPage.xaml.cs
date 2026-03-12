@@ -1213,7 +1213,6 @@ namespace TelegramWP10
                 smtc.IsStopEnabled = false;
                 smtc.IsNextEnabled = false;
                 smtc.IsPreviousEnabled = false;
-                smtc.IsSeekEnabled = true;  // включаем перемотку с экрана блокировки
                 smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
                 smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
                 smtc.DisplayUpdater.Update();
