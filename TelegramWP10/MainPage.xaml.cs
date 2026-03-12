@@ -1141,6 +1141,8 @@ namespace TelegramWP10
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(item.FilePath);
                 var stream = await file.OpenAsync(Windows.Storage.FileAccessMode.Read);
                 var player = new Windows.UI.Xaml.Controls.MediaElement();
+                player.AudioCategory = Windows.UI.Xaml.Media.AudioCategory.BackgroundCapableMedia;
+                player.AudioDeviceType = Windows.UI.Xaml.Media.AudioDeviceType.Multimedia;
                 player.SetSource(stream, file.ContentType);
                 player.AutoPlay = true;
                 player.MediaEnded += (s, ev) => {
