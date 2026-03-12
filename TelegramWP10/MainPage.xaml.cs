@@ -516,13 +516,25 @@ namespace TelegramWP10
                 case "updateMessageContent":
                     long umcChatId = update["chat_id"]?.ToObject<long>() ?? 0;
                     long umcMsgId = update["message_id"]?.ToObject<long>() ?? 0;
+                    Log("updateMessageContent chat=" + umcChatId + " msg=" + umcMsgId + " current=" + _currentChatId + " inDict=" + _messagesDict.ContainsKey(umcMsgId));
                     if (umcChatId == _currentChatId && _messagesDict.ContainsKey(umcMsgId)) {
                         var content = update["new_content"];
                         string cType = content?["@type"]?.ToString() ?? "";
                         if (cType == "messageText") {
                             string newText = content["text"]?["text"]?.ToString() ?? "";
+                            Log("updateMessageContent applying newText=" + newText);
                             _messagesDict[umcMsgId].Text = newText;
                         }
+                    }
+                    break;
+
+                case "updateMessageEdited":
+                    // TDLib шлёт updateMessageEdited при редактировании — дозапрашиваем сообщение
+                    long umeChat = update["chat_id"]?.ToObject<long>() ?? 0;
+                    long umeMsg = update["message_id"]?.ToObject<long>() ?? 0;
+                    Log("updateMessageEdited chat=" + umeChat + " msg=" + umeMsg);
+                    if (umeChat == _currentChatId && _messagesDict.ContainsKey(umeMsg)) {
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getMessage\",\"chat_id\":" + umeChat + ",\"message_id\":" + umeMsg + "}");
                     }
                     break;
 
@@ -548,6 +560,15 @@ namespace TelegramWP10
                             : fType == "messageVoiceNote" ? "🎤 Голосовое"
                             : "Сообщение";
                         waitingItem.ReplyToText = string.IsNullOrEmpty(fText) ? "Сообщение" : fText;
+                    }
+                    // Обновляем текст если это ответ после редактирования
+                    if (fetchedMsgId != 0 && _messagesDict.ContainsKey(fetchedMsgId)) {
+                        var mc = update["content"];
+                        if (mc?["@type"]?.ToString() == "messageText") {
+                            string refreshed = mc["text"]?["text"]?.ToString() ?? "";
+                            Log("message refresh text=" + refreshed);
+                            _messagesDict[fetchedMsgId].Text = refreshed;
+                        }
                     }
                     break;
 
