@@ -1213,13 +1213,14 @@ namespace TelegramWP10
                 smtc.IsStopEnabled = false;
                 smtc.IsNextEnabled = false;
                 smtc.IsPreviousEnabled = false;
+                smtc.IsSeekEnabled = true;  // включаем перемотку с экрана блокировки
                 smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
                 smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
                 smtc.DisplayUpdater.Update();
                 smtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Playing;
-                // CommandManager отключаем — иначе он дублирует SMTC и паузит сам
+                // CommandManager отключаем — иначе он сам обрабатывает команды системы и паузит
                 player.CommandManager.IsEnabled = false;
-                // Кнопки с экрана блокировки обрабатываем вручную
+                // Кнопки с экрана блокировки
                 smtc.ButtonPressed += (ss, ee) => {
                     switch (ee.Button) {
                         case Windows.Media.SystemMediaTransportControlsButton.Play:
@@ -1232,10 +1233,23 @@ namespace TelegramWP10
                             break;
                     }
                 };
-                // Перехватываем StateChanged — синхронизируем SMTC и UI
+                // Перемотка с экрана блокировки
+                smtc.PlaybackPositionChangeRequested += (ss, ee) => {
+                    player.PlaybackSession.Position = ee.RequestedPlaybackPosition;
+                };
+                // Обновляем позицию в SMTC (для прогресс-бара на экране блокировки)
+                player.PlaybackSession.PositionChanged += (session, args) => {
+                    smtc.UpdateTimelineProperties(new Windows.Media.SystemMediaTransportControlsTimelineProperties {
+                        StartTime = TimeSpan.Zero,
+                        MinSeekTime = TimeSpan.Zero,
+                        Position = session.Position,
+                        MaxSeekTime = session.NaturalDuration,
+                        EndTime = session.NaturalDuration
+                    });
+                };
+                // Если система паузит не через наш ButtonPressed — возобновляем
                 player.PlaybackSession.PlaybackStateChanged += (session, args) => {
                     Log("AUDIO STATE: " + session.PlaybackState);
-                    // Если система паузит без нашей команды (не через ButtonPressed) — возобновляем
                     if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused &&
                         smtc.PlaybackStatus == Windows.Media.MediaPlaybackStatus.Playing) {
                         player.Play();
