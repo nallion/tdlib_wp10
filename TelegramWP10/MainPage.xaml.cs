@@ -1205,12 +1205,21 @@ namespace TelegramWP10
             TdJson.SendUtf8(_client, sendReq.ToString());
         }
 
+        private void SubscribeRichText(Windows.UI.Xaml.Controls.RichTextBlock rtb, MessageItem item) {
+            BuildRichText(rtb, item);
+            item.PropertyChanged += async (s, e2) => {
+                if (e2.PropertyName == "Text")
+                    await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal,
+                        () => BuildRichText(rtb, rtb.DataContext as MessageItem ?? item));
+            };
+        }
+
         private void MsgRichText_DataContextChanged(Windows.UI.Xaml.FrameworkElement sender, Windows.UI.Xaml.DataContextChangedEventArgs args) {
             var rtb = sender as Windows.UI.Xaml.Controls.RichTextBlock;
             if (rtb == null) return;
             var item = rtb.DataContext as MessageItem;
             if (item == null) return;
-            BuildRichText(rtb, item);
+            SubscribeRichText(rtb, item);
         }
 
         private void MsgRichText_Loaded(object sender, RoutedEventArgs e) {
@@ -1218,12 +1227,7 @@ namespace TelegramWP10
             if (rtb == null) return;
             var item = rtb.DataContext as MessageItem;
             if (item == null) return;
-            BuildRichText(rtb, item);
-            // Перестраиваем при изменении текста (редактирование)
-            item.PropertyChanged += (s, args) => {
-                if (args.PropertyName == "Text")
-                    BuildRichText(rtb, item);
-            };
+            SubscribeRichText(rtb, item);
         }
 
         private void BuildRichText(Windows.UI.Xaml.Controls.RichTextBlock rtb, MessageItem item) {
