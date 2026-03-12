@@ -1221,7 +1221,7 @@ namespace TelegramWP10
             } catch (Exception ex) { Log("FULLPHOTO ERR: " + ex.Message); }
         }
 
-        private void MessagesListView_ItemClick(object sender, ItemClickEventArgs e) {
+        private async void MessagesListView_ItemClick(object sender, ItemClickEventArgs e) {
             var item = e.ClickedItem as MessageItem;
             if (item == null || !item.IsVideo) return;
             if (string.IsNullOrEmpty(item.FilePath)) {
