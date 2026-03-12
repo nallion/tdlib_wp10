@@ -76,6 +76,11 @@ namespace TelegramWP10
                 }
             };
             InitAsync();
+            // Логируем lifecycle приложения для диагностики фонового аудио
+            Application.Current.EnteredBackground += (s, e) => Log("APP EnteredBackground");
+            Application.Current.LeavingBackground += (s, e) => Log("APP LeavingBackground");
+            Application.Current.Suspending += (s, e) => Log("APP Suspending");
+            Application.Current.Resuming += (s, e) => Log("APP Resuming");
         }
 
         private async void Log(string m) {
@@ -1141,10 +1146,8 @@ namespace TelegramWP10
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(item.FilePath);
                 var player = new Windows.Media.Playback.MediaPlayer();
                 player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
-                // CreateFromStorageFile — не требует stream, источник живёт пока жив player
                 var source = Windows.Media.Core.MediaSource.CreateFromStorageFile(file);
                 player.Source = source;
-                // Настраиваем SMTC для отображения на экране блокировки
                 var smtc = player.SystemMediaTransportControls;
                 smtc.IsEnabled = true;
                 smtc.IsPlayEnabled = true;
@@ -1152,9 +1155,20 @@ namespace TelegramWP10
                 smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
                 smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
                 smtc.DisplayUpdater.Update();
+                // Диагностика — логируем все изменения состояния плеера
+                player.PlaybackSession.PlaybackStateChanged += (session, args) => {
+                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        Log("AUDIO STATE: " + session.PlaybackState));
+                };
+                player.MediaOpened += (s, ev) => {
+                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        Log("AUDIO OPENED ok"));
+                };
                 player.Play();
+                Log("AUDIO Play() called, state=" + player.PlaybackSession.PlaybackState);
                 player.MediaEnded += (s, ev) => {
                     var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                        Log("AUDIO ENDED");
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
                         _currentAudioMsgId = 0;
@@ -1162,7 +1176,7 @@ namespace TelegramWP10
                 };
                 player.MediaFailed += (s, ev) => {
                     var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                        Log("AUDIO MediaFailed: " + ev.ErrorMessage);
+                        Log("AUDIO FAILED: " + ev.ErrorMessage);
                         item.AudioPlayStatus = "▶";
                         _currentAudioPlayer = null;
                         _currentAudioMsgId = 0;
