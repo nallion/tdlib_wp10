@@ -513,6 +513,19 @@ namespace TelegramWP10
                 case "ok":
                     break;
 
+                case "updateMessageContent":
+                    long umcChatId = update["chat_id"]?.ToObject<long>() ?? 0;
+                    long umcMsgId = update["message_id"]?.ToObject<long>() ?? 0;
+                    if (umcChatId == _currentChatId && _messagesDict.ContainsKey(umcMsgId)) {
+                        var content = update["new_content"];
+                        string cType = content?["@type"]?.ToString() ?? "";
+                        if (cType == "messageText") {
+                            string newText = content["text"]?["text"]?.ToString() ?? "";
+                            _messagesDict[umcMsgId].Text = newText;
+                        }
+                    }
+                    break;
+
                 case "chat":
                     // Ответ на getChat — обрабатывается как updateNewChat через общий путь
                     // TDLib также шлёт updateNewChat, поэтому просто грузим следующий
