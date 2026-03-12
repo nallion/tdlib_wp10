@@ -171,8 +171,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
+                var appFolder = await Windows.Storage.KnownFolders.MusicLibrary
+                    .CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
@@ -1258,12 +1258,15 @@ namespace TelegramWP10
             rtb.Blocks.Clear();
             var para = new Windows.UI.Xaml.Documents.Paragraph();
             string text = item.Text ?? "";
+            // Исходящие — светло-жёлтый (на синем #0088cc), входящие — голубой (на сером #333333)
+            var linkColor = item.IsOutgoing
+                ? Windows.UI.Color.FromArgb(255, 255, 229, 127)  // #FFE57F
+                : Windows.UI.Color.FromArgb(255, 100, 200, 255); // #64C8FF
 
             if (item.Entities == null || item.Entities.Count == 0) {
                 para.Inlines.Add(new Windows.UI.Xaml.Documents.Run { Text = text });
             } else {
                 int pos = 0;
-                // сортируем по offset на случай неупорядоченности
                 var sorted = item.Entities.OrderBy(x => x.Offset).ToList();
                 foreach (var ent in sorted) {
                     int offset = ent.Offset, length = ent.Length;
@@ -1275,7 +1278,8 @@ namespace TelegramWP10
                         string linkText = text.Substring(offset, safeLen);
                         try {
                             var hl = new Windows.UI.Xaml.Documents.Hyperlink {
-                                NavigateUri = new Uri(url.StartsWith("http") ? url : "https://" + url)
+                                NavigateUri = new Uri(url.StartsWith("http") ? url : "https://" + url),
+                                Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(linkColor)
                             };
                             hl.Inlines.Add(new Windows.UI.Xaml.Documents.Run { Text = linkText });
                             para.Inlines.Add(hl);
