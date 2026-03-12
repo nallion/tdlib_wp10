@@ -100,6 +100,13 @@ namespace TelegramWP10
         public ObservableCollection<InlineButtonRow> InlineButtons { get => _inlineButtons; set { _inlineButtons = value; OnPropertyChanged("InlineButtons"); OnPropertyChanged("InlineButtonsVisibility"); } }
         public Visibility InlineButtonsVisibility => _inlineButtons != null && _inlineButtons.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
+        private string _videoDownloadProgress;
+        public string VideoDownloadProgress { get => _videoDownloadProgress; set { _videoDownloadProgress = value; OnPropertyChanged("VideoDownloadProgress"); OnPropertyChanged("VideoProgressVisibility"); } }
+        public Visibility VideoProgressVisibility => !string.IsNullOrEmpty(_videoDownloadProgress) ? Visibility.Visible : Visibility.Collapsed;
+
+        // Полный file_id фото для загрузки полноразмерной версии
+        public long FullPhotoFileId { get; set; }
+
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }

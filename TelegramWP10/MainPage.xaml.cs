@@ -25,6 +25,7 @@ namespace TelegramWP10
         // replyMsgId → MessageItem которому нужно заполнить ReplyToText
         private Dictionary<long, MessageItem> _replyRequests = new Dictionary<long, MessageItem>();
         private long _currentChatId = 0;
+        private long _fullPhotoMsgId = 0;
         private bool _currentChatIsGroup = false;
         private Windows.UI.Xaml.DispatcherTimer _statusTimer;
         private Windows.UI.Xaml.DispatcherTimer _audioPositionTimer;
@@ -369,10 +370,20 @@ namespace TelegramWP10
                                      fpath.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
                                 if (isImg)
                                     { var t = UpdateMessagePhoto(mid, fpath); }
+                                // Если это полноразмерное фото для оверлея
+                                if (isCompleted && isImg && _fullPhotoMsgId == mid && !string.IsNullOrEmpty(fpath))
+                                    { var t = ShowFullPhoto(fpath); }
                                 if (_messagesDict.ContainsKey(mid)) {
                                     var msgItem = _messagesDict[mid];
-                                    if (msgItem.IsVideo && !string.IsNullOrEmpty(fpath))
-                                        msgItem.FilePath = fpath;
+                                    if (msgItem.IsVideo) {
+                                        if (isCompleted && !string.IsNullOrEmpty(fpath)) {
+                                            msgItem.FilePath = fpath;
+                                            msgItem.VideoDownloadProgress = null; // скрываем прогресс
+                                        } else if (total > 0) {
+                                            int pct = (int)(downloaded * 100 / total);
+                                            msgItem.VideoDownloadProgress = "⏳ " + pct + "%";
+                                        }
+                                    }
                                     if (msgItem.IsDocument) {
                                         if (isCompleted && !string.IsNullOrEmpty(fpath)) {
                                             msgItem.FilePath = fpath;
@@ -906,6 +917,7 @@ namespace TelegramWP10
                             + " path=" + fileToken?["local"]?["path"]);
                         if (fileToken != null) {
                             long pfid = (long)fileToken["id"];
+                            item.FullPhotoFileId = pfid;
                             _fileToMsgId[pfid] = msgId;
                             _messagesDict[msgId] = item;
                             string phPath = fileToken["local"]?["path"]?.ToString();
@@ -1107,6 +1119,9 @@ namespace TelegramWP10
             _fileToMsgId.Clear();
             _replyRequests.Clear();
             _editingMessageId = 0;
+            _fullPhotoMsgId = 0;
+            PhotoOverlay.Visibility = Visibility.Collapsed;
+            PhotoOverlayImage.Source = null;
             MessageInput.Text = "";
             SendButton.Content = "➤";
             // Показываем панель чата с индикатором загрузки, но список сообщений ещё скрыт
@@ -1170,7 +1185,43 @@ namespace TelegramWP10
             TdJson.SendUtf8(_client, sendReq.ToString());
         }
 
-        private async void MessagesListView_ItemClick(object sender, ItemClickEventArgs e) {
+        private async void PhotoImage_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e) {
+            e.Handled = true;
+            var img = sender as Image;
+            var item = img?.DataContext as MessageItem;
+            if (item == null || item.IsVideo) return;
+
+            // Показываем оверлей сразу с превью
+            PhotoOverlay.Visibility = Visibility.Visible;
+            PhotoOverlayImage.Source = item.AttachedPhoto;
+            PhotoOverlayStatus.Text = "Загрузка полного размера...";
+
+            if (item.FullPhotoFileId == 0) { PhotoOverlayStatus.Text = ""; return; }
+
+            // Запрашиваем полноразмерный файл
+            _fullPhotoMsgId = item.Id;
+            TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + item.FullPhotoFileId + ",\"priority\":32,\"synchronous\":false}");
+        }
+
+        private void PhotoOverlay_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e) {
+            PhotoOverlay.Visibility = Visibility.Collapsed;
+            PhotoOverlayImage.Source = null;
+            _fullPhotoMsgId = 0;
+        }
+
+        private async Task ShowFullPhoto(string path) {
+            try {
+                var file = await StorageFile.GetFileFromPathAsync(path);
+                using (var stream = await file.OpenReadAsync()) {
+                    var bitmap = new Windows.UI.Xaml.Media.Imaging.BitmapImage();
+                    await bitmap.SetSourceAsync(stream);
+                    PhotoOverlayImage.Source = bitmap;
+                    PhotoOverlayStatus.Text = "";
+                }
+            } catch (Exception ex) { Log("FULLPHOTO ERR: " + ex.Message); }
+        }
+
+        private void MessagesListView_ItemClick(object sender, ItemClickEventArgs e) {
             var item = e.ClickedItem as MessageItem;
             if (item == null || !item.IsVideo) return;
             if (string.IsNullOrEmpty(item.FilePath)) {
