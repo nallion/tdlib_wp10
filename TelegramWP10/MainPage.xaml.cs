@@ -32,6 +32,7 @@ namespace TelegramWP10
         private bool _audioSliderDragging = false;
         private long _pendingHistoryChatId = 0;
         private int _historyRetryCount = 0;
+        private bool _loadingOlderHistory = false; // true = дозагрузка старых, false = начальная загрузка
         private long _currentChatOutboxReadId = 0;
         private bool _loadingChats = false;
         private Queue<long> _pendingChatIds = new Queue<long>();
@@ -598,29 +599,52 @@ namespace TelegramWP10
                     long expectedChat = _pendingHistoryChatId;
                     var msgs = update["messages"] as JArray;
                     int totalCount = update["total_count"]?.ToObject<int>() ?? 0;
-                    Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count + " total=" + totalCount);
+                    Log("messages expected=" + expectedChat + " current=" + _currentChatId + " count=" + msgs?.Count + " total=" + totalCount + " older=" + _loadingOlderHistory);
                     if (expectedChat != _currentChatId) { Log("SKIP — user switched chat"); break; }
                     int gotCount = msgs?.Count ?? 0;
-                    if (gotCount < 2 && _historyRetryCount < 2) {
-                        _historyRetryCount++;
-                        Log("messages too few (" + gotCount + ") retry #" + _historyRetryCount);
-                        var retryChat = _currentChatId;
-                        Task.Delay(800).ContinueWith(_ =>
-                            Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                                if (_currentChatId == retryChat)
-                                    TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + retryChat + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
-                            }));
-                        break;
+
+                    if (!_loadingOlderHistory) {
+                        // Начальная загрузка — retry если пришло слишком мало
+                        if (gotCount < 2 && _historyRetryCount < 2) {
+                            _historyRetryCount++;
+                            Log("messages too few (" + gotCount + ") retry #" + _historyRetryCount);
+                            var retryChat = _currentChatId;
+                            Task.Delay(800).ContinueWith(_ =>
+                                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                                    if (_currentChatId == retryChat)
+                                        TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + retryChat + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
+                                }));
+                            break;
+                        }
+                        _messageItems.Clear();
+                        for (int i = msgs.Count - 1; i >= 0; i--) {
+                            var it = ParseMessage(msgs[i]);
+                            if (it != null) _messageItems.Add(it);
+                        }
+                        Log("rendered " + _messageItems.Count + " messages");
+                        // Если получили меньше 50 — дозагружаем более старые
+                        if (gotCount > 0 && gotCount < 50) {
+                            long oldestId = msgs[msgs.Count - 1]?["id"]?.ToObject<long>() ?? 0;
+                            if (oldestId != 0) {
+                                _loadingOlderHistory = true;
+                                Log("loading older from " + oldestId);
+                                TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + expectedChat + ",\"from_message_id\":" + oldestId + ",\"offset\":0,\"limit\":" + (50 - gotCount) + "}");
+                            }
+                        }
+                    } else {
+                        // Дозагрузка старых — вставляем в начало списка
+                        _loadingOlderHistory = false;
+                        if (gotCount > 0) {
+                            int insertIdx = 0;
+                            for (int i = msgs.Count - 1; i >= 0; i--) {
+                                var it = ParseMessage(msgs[i]);
+                                if (it != null) _messageItems.Insert(insertIdx++, it);
+                            }
+                            Log("prepended " + gotCount + " older messages, total=" + _messageItems.Count);
+                        }
                     }
-                    _messageItems.Clear();
-                    long lastMsgId = 0;
-                    for (int i = msgs.Count - 1; i >= 0; i--) {
-                        var item = ParseMessage(msgs[i]);
-                        if (item != null) _messageItems.Add(item);
-                    }
-                    // id последнего (самого нового) сообщения — первый элемент массива TDLib
-                    lastMsgId = msgs[0]?["id"]?.ToObject<long>() ?? 0;
-                    Log("rendered " + _messageItems.Count + " messages");
+
+                    long lastMsgId = _messageItems.Count > 0 ? _messageItems[_messageItems.Count - 1].Id : 0;
                     _isLoadingHistory = false;
                     LoadingIndicator.Visibility = Visibility.Collapsed;
                     MessagesListView.Visibility = Visibility.Visible;
@@ -628,7 +652,6 @@ namespace TelegramWP10
                         MessagesListView.UpdateLayout();
                         MessagesListView.ScrollIntoView(_messageItems[_messageItems.Count - 1]);
                     }
-                    // Помечаем сообщения как прочитанные — TDLib пришлёт updateChatReadInbox с unread_count=0
                     if (lastMsgId != 0)
                         TdJson.SendUtf8(_client, "{\"@type\":\"viewMessages\",\"chat_id\":" + expectedChat + ",\"message_ids\":[" + lastMsgId + "],\"force_read\":true}");
                     break;
@@ -1133,6 +1156,7 @@ namespace TelegramWP10
                 (chat.Id < 0); // группы и супергруппы имеют отрицательный ID
             _pendingHistoryChatId = chat.Id;
             _historyRetryCount = 0;
+            _loadingOlderHistory = false;
             _currentChatOutboxReadId = chat.OutboxReadId;
             _messageItems.Clear();
             _messagesDict.Clear();
