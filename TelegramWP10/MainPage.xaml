@@ -130,6 +130,9 @@
                             <FlyoutBase.AttachedFlyout>
                                 <MenuFlyout>
                                     <MenuFlyoutItem Text="Копировать текст" Click="CopyMessage_Click"/>
+                                    <MenuFlyoutItem Text="✏ Редактировать" Click="EditMessage_Click"/>
+                                    <MenuFlyoutItem Text="🗑 Удалить сообщение" Click="DeleteMessageSelf_Click"/>
+                                    <MenuFlyoutItem Text="🗑 Удалить у всех" Click="DeleteMessageAll_Click"/>
                                 </MenuFlyout>
                             </FlyoutBase.AttachedFlyout>
                             <StackPanel MaxWidth="260">
@@ -283,7 +286,7 @@
                         </MenuFlyout>
                     </FlyoutBase.AttachedFlyout>
                 </TextBox>
-                <Button Grid.Column="3" Content="➤" Click="SendMessage_Click" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
+                <Button x:Name="SendButton" Grid.Column="3" Content="➤" Click="SendMessage_Click" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
             </Grid>
         </Grid>
     </Grid>

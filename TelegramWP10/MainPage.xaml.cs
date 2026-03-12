@@ -1070,6 +1070,9 @@ namespace TelegramWP10
             _messagesDict.Clear();
             _fileToMsgId.Clear();
             _replyRequests.Clear();
+            _editingMessageId = 0;
+            MessageInput.Text = "";
+            SendButton.Content = "➤";
             // Показываем панель чата с индикатором загрузки, но список сообщений ещё скрыт
             StartPanel.Visibility = Visibility.Collapsed;
             MessagesPanel.Visibility = Visibility.Visible;
@@ -1095,16 +1098,36 @@ namespace TelegramWP10
 
         private void SendMessage_Click(object sender, RoutedEventArgs e) {
             if (string.IsNullOrWhiteSpace(MessageInput.Text)) return;
-            JObject req = new JObject {
+            string text = MessageInput.Text;
+            MessageInput.Text = "";
+
+            // Режим редактирования
+            if (_editingMessageId != 0) {
+                long editId = _editingMessageId;
+                _editingMessageId = 0;
+                SendButton.Content = "➤";
+                JObject req = new JObject {
+                    ["@type"] = "editMessageText",
+                    ["chat_id"] = _currentChatId,
+                    ["message_id"] = editId,
+                    ["input_message_content"] = new JObject {
+                        ["@type"] = "inputMessageText",
+                        ["text"] = new JObject { ["@type"] = "formattedText", ["text"] = text }
+                    }
+                };
+                TdJson.SendUtf8(_client, req.ToString());
+                return;
+            }
+
+            JObject sendReq = new JObject {
                 ["@type"] = "sendMessage",
                 ["chat_id"] = _currentChatId,
                 ["input_message_content"] = new JObject {
                     ["@type"] = "inputMessageText",
-                    ["text"] = new JObject { ["@type"] = "formattedText", ["text"] = MessageInput.Text }
+                    ["text"] = new JObject { ["@type"] = "formattedText", ["text"] = text }
                 }
             };
-            TdJson.SendUtf8(_client, req.ToString());
-            MessageInput.Text = "";
+            TdJson.SendUtf8(_client, sendReq.ToString());
         }
 
         private async void MessagesListView_ItemClick(object sender, ItemClickEventArgs e) {
@@ -1511,6 +1534,50 @@ namespace TelegramWP10
             Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
             _selectedMessageForCopy = null;
         }
+
+        private void DeleteMessageSelf_Click(object sender, RoutedEventArgs e) {
+            if (_selectedMessageForCopy == null) return;
+            DeleteMessages(new[] { _selectedMessageForCopy.Id }, revoke: false);
+            _selectedMessageForCopy = null;
+        }
+
+        private void DeleteMessageAll_Click(object sender, RoutedEventArgs e) {
+            if (_selectedMessageForCopy == null) return;
+            DeleteMessages(new[] { _selectedMessageForCopy.Id }, revoke: true);
+            _selectedMessageForCopy = null;
+        }
+
+        private void DeleteMessages(long[] messageIds, bool revoke) {
+            var req = new JObject {
+                ["@type"] = "deleteMessages",
+                ["chat_id"] = _currentChatId,
+                ["message_ids"] = new JArray(messageIds),
+                ["revoke"] = revoke
+            };
+            TdJson.SendUtf8(_client, req.ToString(Newtonsoft.Json.Formatting.None));
+            // Убираем из UI сразу
+            var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                foreach (var id in messageIds) {
+                    var item = _messageItems.FirstOrDefault(m => m.Id == id);
+                    if (item != null) _messageItems.Remove(item);
+                    if (_messagesDict.ContainsKey(id)) _messagesDict.Remove(id);
+                }
+            });
+        }
+
+        private void EditMessage_Click(object sender, RoutedEventArgs e) {
+            if (_selectedMessageForCopy == null) return;
+            var msg = _selectedMessageForCopy;
+            _selectedMessageForCopy = null;
+            if (string.IsNullOrEmpty(msg.Text)) return;
+            // Заполняем поле ввода текстом и запоминаем редактируемое сообщение
+            MessageInput.Text = msg.Text;
+            MessageInput.SelectionStart = msg.Text.Length;
+            _editingMessageId = msg.Id;
+            SendButton.Content = "✓"; // визуальный индикатор режима редактирования
+        }
+
+        private long _editingMessageId = 0;
 
         private void MessageInput_Holding(object sender, Windows.UI.Xaml.Input.HoldingRoutedEventArgs e) {
             if (e.HoldingState != Windows.UI.Input.HoldingState.Started) return;
