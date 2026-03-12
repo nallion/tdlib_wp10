@@ -1219,6 +1219,11 @@ namespace TelegramWP10
             var item = rtb.DataContext as MessageItem;
             if (item == null) return;
             BuildRichText(rtb, item);
+            // Перестраиваем при изменении текста (редактирование)
+            item.PropertyChanged += (s, args) => {
+                if (args.PropertyName == "Text")
+                    BuildRichText(rtb, item);
+            };
         }
 
         private void BuildRichText(Windows.UI.Xaml.Controls.RichTextBlock rtb, MessageItem item) {
