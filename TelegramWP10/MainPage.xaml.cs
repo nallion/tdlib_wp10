@@ -1170,17 +1170,17 @@ namespace TelegramWP10
                 player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
                 var source = Windows.Media.Core.MediaSource.CreateFromStorageFile(file);
                 player.Source = source;
+                // Отключаем SMTC — иначе система посылает Pause через него при блокировке экрана
                 var smtc = player.SystemMediaTransportControls;
-                smtc.IsEnabled = true;
-                smtc.IsPlayEnabled = true;
-                smtc.IsPauseEnabled = true;
-                smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
-                smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
-                smtc.DisplayUpdater.Update();
-                // Диагностика — логируем все изменения состояния плеера
+                smtc.IsEnabled = false;
+                // Перехватываем StateChanged — если система нас паузит, сразу возобновляем
                 player.PlaybackSession.PlaybackStateChanged += (session, args) => {
-                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                        Log("AUDIO STATE: " + session.PlaybackState));
+                    Log("AUDIO STATE: " + session.PlaybackState);
+                    if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused) {
+                        // Принудительно продолжаем — система не должна нас останавливать
+                        player.Play();
+                        Log("AUDIO force-resumed after pause");
+                    }
                 };
                 player.MediaOpened += (s, ev) => {
                     var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
