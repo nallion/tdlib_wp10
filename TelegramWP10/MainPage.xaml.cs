@@ -120,7 +120,7 @@ namespace TelegramWP10
                     await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () => {
                         try {
                             var item = _messagesDict[savedMsgId];
-                            var player = Windows.Media.Playback.BackgroundMediaPlayer.Current;
+                            var player = new Windows.Media.Playback.MediaPlayer();
                             player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
                             var source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(savedPath));
                             _currentAudioSource = source;
@@ -1241,9 +1241,7 @@ namespace TelegramWP10
                 return;
             }
             try {
-                // BackgroundMediaPlayer.Current живёт в фоновом процессе AudioBackgroundTask
-                // и НЕ суспендируется вместе с UI — это ключевое отличие от new MediaPlayer()
-                var player = Windows.Media.Playback.BackgroundMediaPlayer.Current;
+                var player = new Windows.Media.Playback.MediaPlayer();
                 player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
                 var source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(item.FilePath));
                 _currentAudioSource = source;
