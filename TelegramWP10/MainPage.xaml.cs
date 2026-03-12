@@ -120,7 +120,7 @@ namespace TelegramWP10
                     await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () => {
                         try {
                             var item = _messagesDict[savedMsgId];
-                            var player = new Windows.Media.Playback.MediaPlayer();
+                            var player = Windows.Media.Playback.BackgroundMediaPlayer.Current;
                             player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
                             var source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(savedPath));
                             _currentAudioSource = source;
@@ -1213,25 +1213,27 @@ namespace TelegramWP10
             Log("AUDIO PLAY msgId=" + msgId + " path=" + item.FilePath + " status=" + item.AudioPlayStatus);
             // Если уже играет — стоп
             if (_currentAudioMsgId == msgId && _currentAudioPlayer != null) {
-                var stoppingSmtc = _currentAudioPlayer.SystemMediaTransportControls;
-                stoppingSmtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Stopped;
-                _currentAudioPlayer.Pause(); _currentAudioPlayer.Source = null;
-                _currentAudioPlayer = null;
+                _currentAudioPlayer.Pause();
+                _currentAudioPlayer.Source = null;
+                _currentAudioPlayer.SystemMediaTransportControls.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Stopped;
+                _currentAudioPlayer = null; // сбрасываем ссылку (не сам плеер — он синглтон)
                 _currentAudioSource = null;
                 item.AudioPlayStatus = "▶";
                 _currentAudioMsgId = 0;
+                _currentAudioFilePath = null;
                 ReleaseMediaSession();
                 return;
             }
-            // Остановить предыдущий
+            // Остановить предыдущий трек
             if (_currentAudioPlayer != null) {
-                var stoppingSmtc = _currentAudioPlayer.SystemMediaTransportControls;
-                stoppingSmtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Stopped;
-                _currentAudioPlayer.Pause(); _currentAudioPlayer.Source = null;
+                _currentAudioPlayer.Pause();
+                _currentAudioPlayer.Source = null;
+                _currentAudioPlayer.SystemMediaTransportControls.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Stopped;
                 if (_messagesDict.ContainsKey(_currentAudioMsgId))
                     _messagesDict[_currentAudioMsgId].AudioPlayStatus = "▶";
                 _currentAudioPlayer = null;
                 _currentAudioSource = null;
+                _currentAudioFilePath = null;
                 ReleaseMediaSession();
             }
             if (string.IsNullOrEmpty(item.FilePath)) {
@@ -1239,15 +1241,14 @@ namespace TelegramWP10
                 return;
             }
             try {
-                var player = new Windows.Media.Playback.MediaPlayer();
+                // BackgroundMediaPlayer.Current живёт в фоновом процессе AudioBackgroundTask
+                // и НЕ суспендируется вместе с UI — это ключевое отличие от new MediaPlayer()
+                var player = Windows.Media.Playback.BackgroundMediaPlayer.Current;
                 player.AudioCategory = Windows.Media.Playback.MediaPlayerAudioCategory.Media;
-                // CreateFromUri не держит файловый хэндл — не падает после suspend/resume
                 var source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(item.FilePath));
                 _currentAudioSource = source;
                 player.Source = source;
 
-                // CommandManager ВКЛЮЧЁН — он регистрирует плеер в системном медиапайплайне
-                // и обеспечивает появление плеера на экране блокировки. Не отключать!
                 SetupPlayer(player, item, TimeSpan.Zero);
 
                 player.Play();
