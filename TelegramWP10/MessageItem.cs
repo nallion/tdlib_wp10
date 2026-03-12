@@ -82,10 +82,16 @@ namespace TelegramWP10
         private string _audioDuration = "";
         private string _audioTitle = "";
         private string _audioPlayStatus = "▶";
+        private double _audioPosition = 0;
+        private double _audioDurationSeconds = 1;
+        private string _audioPositionText = "0:00";
         public bool IsAudio { get => _isAudio; set { _isAudio = value; OnPropertyChanged("IsAudio"); OnPropertyChanged("AudioVisibility"); } }
         public string AudioDuration { get => _audioDuration; set { _audioDuration = value; OnPropertyChanged("AudioDuration"); } }
         public string AudioTitle { get => _audioTitle; set { _audioTitle = value; OnPropertyChanged("AudioTitle"); } }
         public string AudioPlayStatus { get => _audioPlayStatus; set { _audioPlayStatus = value; OnPropertyChanged("AudioPlayStatus"); } }
+        public double AudioPosition { get => _audioPosition; set { _audioPosition = value; OnPropertyChanged("AudioPosition"); } }
+        public double AudioDurationSeconds { get => _audioDurationSeconds; set { _audioDurationSeconds = value > 0 ? value : 1; OnPropertyChanged("AudioDurationSeconds"); } }
+        public string AudioPositionText { get => _audioPositionText; set { _audioPositionText = value; OnPropertyChanged("AudioPositionText"); } }
         public Visibility AudioVisibility => _isAudio ? Visibility.Visible : Visibility.Collapsed;
 
         // Inline-кнопки

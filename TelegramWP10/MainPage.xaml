@@ -182,10 +182,24 @@
                                         </Grid.ColumnDefinitions>
                                         <Button Content="{Binding AudioPlayStatus}" Tag="{Binding Id}" Click="AudioButton_Click"
                                                 Width="40" Height="40" Background="#0088cc" Foreground="White" FontSize="16"
-                                                Padding="0" Margin="0,0,8,0"/>
+                                                Padding="0" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding AudioTitle}" Foreground="White" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding AudioDuration}" Foreground="#AAAAAA" FontSize="11"/>
+                                            <Slider Tag="{Binding Id}" Minimum="0" Maximum="{Binding AudioDurationSeconds}"
+                                                    Value="{Binding AudioPosition, Mode=OneWay}"
+                                                    ManipulationMode="All"
+                                                    ManipulationStarted="AudioSlider_ManipulationStarted"
+                                                    ManipulationCompleted="AudioSlider_ManipulationCompleted"
+                                                    Margin="0,2,0,0" Padding="0" Height="20"
+                                                    Foreground="#0088cc"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding AudioPositionText}" Foreground="#AAAAAA" FontSize="11"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding AudioDuration}" Foreground="#AAAAAA" FontSize="11"/>
+                                            </Grid>
                                         </StackPanel>
                                     </Grid>
                                 </Border>

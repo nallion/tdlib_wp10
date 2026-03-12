@@ -27,6 +27,8 @@ namespace TelegramWP10
         private long _currentChatId = 0;
         private bool _currentChatIsGroup = false;
         private Windows.UI.Xaml.DispatcherTimer _statusTimer;
+        private Windows.UI.Xaml.DispatcherTimer _audioPositionTimer;
+        private bool _audioSliderDragging = false;
         private long _pendingHistoryChatId = 0;
         private int _historyRetryCount = 0;
         private long _currentChatOutboxReadId = 0;
@@ -69,6 +71,21 @@ namespace TelegramWP10
                     UpdateChatStatus(_usersDict[_currentChatId]["status"]);
             };
             _statusTimer.Start();
+            // Таймер обновления позиции аудио (каждые 500мс)
+            _audioPositionTimer = new Windows.UI.Xaml.DispatcherTimer();
+            _audioPositionTimer.Interval = TimeSpan.FromMilliseconds(500);
+            _audioPositionTimer.Tick += (s, e) => {
+                if (_currentAudioPlayer == null || _audioSliderDragging) return;
+                var session = _currentAudioPlayer.PlaybackSession;
+                if (session.NaturalDuration.TotalSeconds > 0 && _messagesDict.ContainsKey(_currentAudioMsgId)) {
+                    var item = _messagesDict[_currentAudioMsgId];
+                    item.AudioDurationSeconds = session.NaturalDuration.TotalSeconds;
+                    item.AudioPosition = session.Position.TotalSeconds;
+                    var pos = session.Position;
+                    item.AudioPositionText = $"{(int)pos.TotalMinutes}:{pos.Seconds:D2}";
+                }
+            };
+            _audioPositionTimer.Start();
             // Системная кнопка "назад"
             var sysNav = Windows.UI.Core.SystemNavigationManager.GetForCurrentView();
             sysNav.BackRequested += (s, e) => {
@@ -1138,6 +1155,17 @@ namespace TelegramWP10
             Log("SEND DOC path=" + path);
         }
 
+        private void AudioSlider_ManipulationStarted(object sender, Windows.UI.Xaml.Input.ManipulationStartedRoutedEventArgs e) {
+            _audioSliderDragging = true;
+        }
+        private void AudioSlider_ManipulationCompleted(object sender, Windows.UI.Xaml.Input.ManipulationCompletedRoutedEventArgs e) {
+            _audioSliderDragging = false;
+            if (_currentAudioPlayer == null) return;
+            var slider = sender as Windows.UI.Xaml.Controls.Slider;
+            if (slider == null) return;
+            _currentAudioPlayer.PlaybackSession.Position = TimeSpan.FromSeconds(slider.Value);
+        }
+
         private async void AudioButton_Click(object sender, RoutedEventArgs e) {
             var btn = sender as Button;
             long msgId = (long)btn.Tag;
@@ -1146,6 +1174,8 @@ namespace TelegramWP10
             Log("AUDIO PLAY msgId=" + msgId + " path=" + item.FilePath + " status=" + item.AudioPlayStatus);
             // Если уже играет — стоп
             if (_currentAudioMsgId == msgId && _currentAudioPlayer != null) {
+                var stoppingSmtc = _currentAudioPlayer.SystemMediaTransportControls;
+                stoppingSmtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Stopped;
                 _currentAudioPlayer.Pause(); _currentAudioPlayer.Source = null;
                 _currentAudioPlayer = null;
                 _currentAudioSource = null;
@@ -1156,6 +1186,8 @@ namespace TelegramWP10
             }
             // Остановить предыдущий
             if (_currentAudioPlayer != null) {
+                var stoppingSmtc = _currentAudioPlayer.SystemMediaTransportControls;
+                stoppingSmtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Stopped;
                 _currentAudioPlayer.Pause(); _currentAudioPlayer.Source = null;
                 if (_messagesDict.ContainsKey(_currentAudioMsgId))
                     _messagesDict[_currentAudioMsgId].AudioPlayStatus = "▶";
@@ -1174,21 +1206,48 @@ namespace TelegramWP10
                 var source = Windows.Media.Core.MediaSource.CreateFromStorageFile(file);
                 _currentAudioSource = source;
                 player.Source = source;
-                // Отключаем SMTC — иначе система посылает Pause через него при блокировке экрана
                 var smtc = player.SystemMediaTransportControls;
-                smtc.IsEnabled = false;
-                // Перехватываем StateChanged — если система нас паузит, сразу возобновляем
+                smtc.IsEnabled = true;
+                smtc.IsPlayEnabled = true;
+                smtc.IsPauseEnabled = true;
+                smtc.IsStopEnabled = false;
+                smtc.IsNextEnabled = false;
+                smtc.IsPreviousEnabled = false;
+                smtc.DisplayUpdater.Type = Windows.Media.MediaPlaybackType.Music;
+                smtc.DisplayUpdater.MusicProperties.Title = item.AudioTitle ?? "";
+                smtc.DisplayUpdater.Update();
+                smtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Playing;
+                // CommandManager отключаем — иначе он дублирует SMTC и паузит сам
+                player.CommandManager.IsEnabled = false;
+                // Кнопки с экрана блокировки обрабатываем вручную
+                smtc.ButtonPressed += (ss, ee) => {
+                    switch (ee.Button) {
+                        case Windows.Media.SystemMediaTransportControlsButton.Play:
+                            player.Play();
+                            smtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Playing;
+                            break;
+                        case Windows.Media.SystemMediaTransportControlsButton.Pause:
+                            player.Pause();
+                            smtc.PlaybackStatus = Windows.Media.MediaPlaybackStatus.Paused;
+                            break;
+                    }
+                };
+                // Перехватываем StateChanged — синхронизируем SMTC и UI
                 player.PlaybackSession.PlaybackStateChanged += (session, args) => {
                     Log("AUDIO STATE: " + session.PlaybackState);
-                    if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused) {
-                        // Принудительно продолжаем — система не должна нас останавливать
+                    // Если система паузит без нашей команды (не через ButtonPressed) — возобновляем
+                    if (session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Paused &&
+                        smtc.PlaybackStatus == Windows.Media.MediaPlaybackStatus.Playing) {
                         player.Play();
-                        Log("AUDIO force-resumed after pause");
+                        Log("AUDIO force-resumed after unexpected pause");
                     }
                 };
                 player.MediaOpened += (s, ev) => {
-                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                        Log("AUDIO OPENED ok"));
+                    var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
+                        var dur = player.PlaybackSession.NaturalDuration;
+                        if (dur.TotalSeconds > 0) item.AudioDurationSeconds = dur.TotalSeconds;
+                        Log("AUDIO OPENED ok dur=" + dur.TotalSeconds);
+                    });
                 };
                 player.Play();
                 Log("AUDIO Play() called, state=" + player.PlaybackSession.PlaybackState);
