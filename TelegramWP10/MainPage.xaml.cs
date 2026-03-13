@@ -177,8 +177,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
+                var appFolder = await Windows.Storage.KnownFolders.MusicLibrary
+                    .CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
@@ -1711,7 +1711,7 @@ namespace TelegramWP10
             var flyout = FlyoutBase.GetAttachedFlyout(border) as MenuFlyout;
             if (flyout != null) {
                 bool canEdit = _selectedMessageForCopy?.IsOutgoing == true && !string.IsNullOrEmpty(_selectedMessageForCopy?.Text);
-                bool canDelete = _selectedMessageForCopy?.IsOutgoing == true;
+                bool canDelete = true; // удалять можно любое сообщение
                 foreach (var item in flyout.Items) {
                     if (item is MenuFlyoutItem mfi) {
                         if (mfi.Name == "MenuEdit") mfi.Visibility = canEdit ? Visibility.Visible : Visibility.Collapsed;
