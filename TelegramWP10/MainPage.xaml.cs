@@ -60,6 +60,7 @@ namespace TelegramWP10
         private bool _loadingArchive = false;
         private bool _loadingArchiveIds = false;   // pre-fetch id архива до загрузки главного
         private HashSet<long> _archiveChatIds = new HashSet<long>(); // id чатов архива
+        private HashSet<long> _pendingGetChat = new HashSet<long>(); // id запрошенных через getChat из LoadNextChat
 
         public MainPage()
         {
@@ -327,13 +328,17 @@ namespace TelegramWP10
                     break;
 
                 case "updateChatAddedToList":
+                    // Игнорируем во время начальной загрузки — порядок формирует LoadNextChat.
+                    // Реагируем только когда чат реально переходит между списками (архив ↔ главный).
+                    if (_loadingChats || _loadingArchive || _loadingArchiveIds) break;
                     long addedChatId = update["chat_id"]?.ToObject<long>() ?? 0;
                     string addedList = update["chat_list"]?["@type"]?.ToString() ?? "";
                     if (addedChatId != 0 && _chatsDict.ContainsKey(addedChatId)) {
                         var addedItem = _chatsDict[addedChatId];
                         if (addedList == "chatListMain") {
-                            // Если чат был в архиве — убираем оттуда, добавляем в главный
+                            // Чат переехал из архива в главный (новое сообщение от незаглушённого)
                             if (_archiveChatItems.Contains(addedItem)) {
+                                _archiveChatIds.Remove(addedChatId);
                                 _archiveChatItems.Remove(addedItem);
                                 UpdateArchiveUnreadBadge();
                             }
@@ -342,12 +347,13 @@ namespace TelegramWP10
                                 ChatCountText.Text = _chatListItems.Count.ToString();
                             }
                         } else if (addedList == "chatListArchive") {
-                            // Чат добавлен в архив — убираем из главного
+                            // Чат заархивирован пользователем
                             if (_chatListItems.Contains(addedItem)) {
                                 _chatListItems.Remove(addedItem);
                                 ChatCountText.Text = _chatListItems.Count.ToString();
                             }
                             if (!_archiveChatItems.Contains(addedItem)) {
+                                _archiveChatIds.Add(addedChatId);
                                 _archiveChatItems.Insert(0, addedItem);
                             }
                         }
@@ -368,8 +374,10 @@ namespace TelegramWP10
                         LoginPanel.Visibility = Visibility.Collapsed;
                         ChatListView.Visibility = Visibility.Visible;
                         LogoutButton.Visibility = Visibility.Visible;
-                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"chat_list\":{\"@type\":\"chatListMain\"},\"limit\":1000}");
-                        _loadingChats = true; Log("getChats sent from updateNewChat");
+                        // Pre-fetch архива перед main — как и при обычной авторизации
+                        TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"chat_list\":{\"@type\":\"chatListArchive\"},\"limit\":1000}");
+                        _loadingArchiveIds = true;
+                        Log("getChats archive pre-fetch sent from saved session");
                     }
                     if (!_chatsDict.ContainsKey(chatId)) {
                         bool isChannel = c["type"]?["@type"]?.ToString() == "chatTypeSupergroup"
@@ -390,15 +398,12 @@ namespace TelegramWP10
                         (positions != null && positions.Any(p => p["list"]?["@type"]?.ToString() == "chatListArchive"));
                     bool isMainChat = !isArchiveChat;
 
-                    if (_loadingArchive && isArchiveChat && !_archiveChatItems.Contains(chatItem)) {
-                        _archiveChatItems.Add(chatItem);
-                        ArchiveChatCountText.Text = "чатов: " + _archiveChatItems.Count;
-                        UpdateArchiveUnreadBadge();
-                        LoadNextChat();
-                    } else if (_loadingChats && isMainChat && !_chatListItems.Contains(chatItem)) {
-                        _chatListItems.Add(chatItem);
-                        ChatCountText.Text = _chatListItems.Count.ToString();
-                        LoadNextChat(); // грузим следующий
+                    // updateNewChat только обновляет _chatsDict.
+                    // Добавление в видимый список — исключительно через LoadNextChat (100ms throttle).
+                    // Исключение: если это ответ на getChat из else-ветки LoadNextChat — продолжаем цепочку.
+                    if (_pendingGetChat.Contains(chatId)) {
+                        _pendingGetChat.Remove(chatId);
+                        LoadNextChat(); // продолжаем очередь
                     }
                     var phSmall = c["photo"]?["small"];
                     if (phSmall != null) {
@@ -862,6 +867,7 @@ namespace TelegramWP10
                         }
                     } else {
                         // Чат ещё не известен — запрашиваем, updateNewChat вызовет LoadNextChat сам
+                        _pendingGetChat.Add(nextId);
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + nextId + "}");
                         return; // не вызываем LoadNextChat здесь — иначе двойной поток
                     }
