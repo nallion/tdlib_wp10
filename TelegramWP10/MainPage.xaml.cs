@@ -915,8 +915,8 @@ namespace TelegramWP10
             else if (diff == 1)  label = "Вчера";
             else if (diff == 2)  label = "Позавчера";
             else if (day.Year == today.Year)
-                                 label = day.ToString("d MMMM", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
-            else                 label = day.ToString("d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+                                 label = day.ToString("d MMMM", new System.Globalization.CultureInfo("ru-RU"));
+            else                 label = day.ToString("d MMMM yyyy", new System.Globalization.CultureInfo("ru-RU"));
             return new MessageItem { IsSeparator = true, SeparatorLabel = label };
         }
 
