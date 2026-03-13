@@ -383,14 +383,11 @@ namespace TelegramWP10
                                 if (_messagesDict.ContainsKey(mid)) {
                                     var msgItem = _messagesDict[mid];
                                     if (msgItem.IsVideo) {
-                                        bool isVideoFile = !string.IsNullOrEmpty(fpath) &&
-                                            (fpath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
-                                             fpath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase) ||
-                                             fpath.EndsWith(".avi", StringComparison.OrdinalIgnoreCase));
-                                        if (isCompleted && isVideoFile) {
+                                        bool isVideoFile = _videoFileIds.ContainsKey(fid);
+                                        if (isCompleted && isVideoFile && !string.IsNullOrEmpty(fpath)) {
                                             msgItem.FilePath = fpath;
                                             msgItem.VideoDownloadProgress = null;
-                                        } else if (!isVideoFile && total > 0) {
+                                        } else if (isVideoFile && total > 0) {
                                             int pct = (int)(downloaded * 100 / total);
                                             msgItem.VideoDownloadProgress = "⏳ " + pct + "%";
                                         }
