@@ -79,8 +79,21 @@
                                                Foreground="#888888" FontSize="13"
                                                TextTrimming="CharacterEllipsis" MaxLines="1" TextWrapping="NoWrap"/>
                                 </StackPanel>
-                                <TextBlock Grid.Column="2" Text="›" Foreground="#888888"
-                                           FontSize="20" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <Grid Grid.Column="2" VerticalAlignment="Center" Margin="4,0,0,0">
+                                    <!-- Бейдж непрочитанных -->
+                                    <Border x:Name="ArchiveUnreadBadge" Background="#888888"
+                                            CornerRadius="10" MinWidth="20" Height="20"
+                                            Padding="5,0" HorizontalAlignment="Right"
+                                            Visibility="Collapsed">
+                                        <TextBlock x:Name="ArchiveUnreadText" Text="0"
+                                                   Foreground="White" FontSize="12"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <!-- Стрелка (когда нет непрочитанных) -->
+                                    <TextBlock x:Name="ArchiveArrow" Text="›" Foreground="#888888"
+                                               FontSize="20" HorizontalAlignment="Right"
+                                               VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                </Grid>
                             </Grid>
                         </Border>
                     </StackPanel>

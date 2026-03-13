@@ -362,6 +362,7 @@ namespace TelegramWP10
                     if (_loadingArchive && isArchiveChat && !_archiveChatItems.Contains(chatItem)) {
                         _archiveChatItems.Add(chatItem);
                         ArchiveChatCountText.Text = "чатов: " + _archiveChatItems.Count;
+                        UpdateArchiveUnreadBadge();
                         LoadNextChat();
                     } else if (_loadingChats && isMainChat && !_chatListItems.Contains(chatItem)) {
                         _chatListItems.Add(chatItem);
@@ -461,6 +462,9 @@ namespace TelegramWP10
                         if (newMsgId != 0)
                             TdJson.SendUtf8(_client, "{\"@type\":\"viewMessages\",\"chat_id\":" + newMsgChatId + ",\"message_ids\":[" + newMsgId + "],\"force_read\":true}");
                     }
+                    // Обновляем бейдж архива если сообщение пришло в архивный чат
+                    if (_archiveChatItems.Any(c => c.Id == newMsgChatId))
+                        UpdateArchiveUnreadBadge();
                     break;
 
                 case "updateConnectionState":
@@ -540,8 +544,12 @@ namespace TelegramWP10
 
                 case "updateChatReadInbox":
                     long ucriId = update["chat_id"]?.ToObject<long>() ?? 0;
-                    if (ucriId != 0 && _chatsDict.ContainsKey(ucriId))
+                    if (ucriId != 0 && _chatsDict.ContainsKey(ucriId)) {
                         _chatsDict[ucriId].UnreadCount = update["unread_count"]?.ToObject<int>() ?? 0;
+                        // Обновляем бейдж архива если чат там
+                        if (_archiveChatItems.Any(c => c.Id == ucriId))
+                            UpdateArchiveUnreadBadge();
+                    }
                     break;
 
                 case "updateMessageInteractionInfo":
@@ -762,6 +770,7 @@ namespace TelegramWP10
                     Log("All archive chats loaded, total=" + _archiveChatItems.Count);
                     ArchiveChatCountText.Text = _archiveChatItems.Count == 0
                         ? "архив пуст" : "чатов: " + _archiveChatItems.Count;
+                    UpdateArchiveUnreadBadge();
                 }
                 return;
             }
@@ -1773,6 +1782,18 @@ namespace TelegramWP10
             MainListHeader.Visibility = Visibility.Visible;
             ArchiveListHeader.Visibility = Visibility.Collapsed;
             ArchiveRow.Visibility = Visibility.Visible;
+        }
+
+        private void UpdateArchiveUnreadBadge() {
+            int total = _archiveChatItems.Sum(c => c.UnreadCount);
+            if (total > 0) {
+                ArchiveUnreadText.Text = total > 99 ? "99+" : total.ToString();
+                ArchiveUnreadBadge.Visibility = Visibility.Visible;
+                ArchiveArrow.Visibility = Visibility.Collapsed;
+            } else {
+                ArchiveUnreadBadge.Visibility = Visibility.Collapsed;
+                ArchiveArrow.Visibility = Visibility.Visible;
+            }
         }
 
         private void SendPhone_Click(object sender, RoutedEventArgs e) {
