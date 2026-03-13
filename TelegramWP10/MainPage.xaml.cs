@@ -195,8 +195,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
+                var musicFolder = Windows.Storage.KnownFolders.MusicLibrary;
+                var appFolder = await musicFolder.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
@@ -1090,6 +1090,7 @@ namespace TelegramWP10
                     if (animFile != null) {
                         long afid = (long)animFile["id"];
                         _fileToMsgId[afid] = msgId;
+                        _videoFileIds[afid] = msgId; // ФИКС: без этого updateFile не обновлял FilePath
                         _messagesDict[msgId] = item;
                         string aPath = animFile["local"]?["path"]?.ToString();
                         Log("ANIM file id=" + afid + " path=" + aPath);
