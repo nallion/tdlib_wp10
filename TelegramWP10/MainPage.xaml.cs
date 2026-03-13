@@ -463,7 +463,7 @@ namespace TelegramWP10
                             TdJson.SendUtf8(_client, "{\"@type\":\"viewMessages\",\"chat_id\":" + newMsgChatId + ",\"message_ids\":[" + newMsgId + "],\"force_read\":true}");
                     }
                     // Обновляем бейдж архива если сообщение пришло в архивный чат
-                    if (_archiveChatItems.Any(c => c.Id == newMsgChatId))
+                    if (_archiveChatItems.Any(ch => ch.Id == newMsgChatId))
                         UpdateArchiveUnreadBadge();
                     break;
 
@@ -547,7 +547,7 @@ namespace TelegramWP10
                     if (ucriId != 0 && _chatsDict.ContainsKey(ucriId)) {
                         _chatsDict[ucriId].UnreadCount = update["unread_count"]?.ToObject<int>() ?? 0;
                         // Обновляем бейдж архива если чат там
-                        if (_archiveChatItems.Any(c => c.Id == ucriId))
+                        if (_archiveChatItems.Any(ch => ch.Id == ucriId))
                             UpdateArchiveUnreadBadge();
                     }
                     break;
