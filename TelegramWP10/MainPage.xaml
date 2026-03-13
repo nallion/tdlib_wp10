@@ -210,10 +210,29 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- Фото / Видео (превью + иконка воспроизведения) -->
                                 <Grid Visibility="{Binding PhotoVisibility}" Margin="0,0,0,5">
                                     <Image Source="{Binding AttachedPhoto}" Stretch="Uniform" MaxWidth="250"
                                            Tapped="PhotoImage_Tapped"/>
-                                    <TextBlock Text="▶" Foreground="White" FontSize="40" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding VideoIconVisibility}" Opacity="0.8" IsHitTestVisible="False"/>
+                                    <TextBlock Text="▶" Foreground="White" FontSize="40" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                               Visibility="{Binding VideoIconVisibility}" Opacity="0.8" IsHitTestVisible="False"/>
+                                    <Border VerticalAlignment="Center" HorizontalAlignment="Center"
+                                            Background="#88000000" Padding="6,2"
+                                            Visibility="{Binding VideoProgressVisibility}">
+                                        <TextBlock Text="{Binding VideoDownloadProgress}" Foreground="White"
+                                                   FontSize="14" FontWeight="Bold" IsHitTestVisible="False"/>
+                                    </Border>
+                                </Grid>
+
+                                <!-- GIF: MediaElement авто-воспроизведение (без превью) -->
+                                <Grid Visibility="{Binding GifPlayerVisibility}" Margin="0,0,0,5"
+                                      MaxWidth="250" Tapped="PhotoImage_Tapped">
+                                    <MediaElement x:Name="GifPlayer"
+                                                  Source="{Binding GifSource}"
+                                                  AutoPlay="True" IsLooping="True"
+                                                  IsMuted="True" AreTransportControlsEnabled="False"
+                                                  Stretch="Uniform" MaxWidth="250"/>
+                                    <!-- Прогресс скачивания GIF -->
                                     <Border VerticalAlignment="Center" HorizontalAlignment="Center"
                                             Background="#88000000" Padding="6,2"
                                             Visibility="{Binding VideoProgressVisibility}">

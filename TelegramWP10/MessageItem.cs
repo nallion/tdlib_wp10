@@ -40,11 +40,22 @@ namespace TelegramWP10
 
         private BitmapImage _attachedPhoto;
         public BitmapImage AttachedPhoto { get => _attachedPhoto; set { _attachedPhoto = value; OnPropertyChanged("AttachedPhoto"); OnPropertyChanged("PhotoVisibility"); } }
-        public Visibility PhotoVisibility => AttachedPhoto != null ? Visibility.Visible : Visibility.Collapsed;
+        // PhotoVisibility: показываем если есть превью ИЛИ это обычное видео (не GIF)
+        public Visibility PhotoVisibility => (AttachedPhoto != null || (IsVideo && !IsGif)) ? Visibility.Visible : Visibility.Collapsed;
 
         private bool _isVideo;
-        public bool IsVideo { get => _isVideo; set { _isVideo = value; OnPropertyChanged("IsVideo"); OnPropertyChanged("VideoIconVisibility"); } }
-        public Visibility VideoIconVisibility => IsVideo ? Visibility.Visible : Visibility.Collapsed;
+        public bool IsVideo { get => _isVideo; set { _isVideo = value; OnPropertyChanged("IsVideo"); OnPropertyChanged("VideoIconVisibility"); OnPropertyChanged("PhotoVisibility"); } }
+        // VideoIcon показываем только для обычного видео (не GIF), когда нет прогресса скачивания
+        public Visibility VideoIconVisibility => (IsVideo && !IsGif) ? Visibility.Visible : Visibility.Collapsed;
+
+        // GIF: отдельный плеер через MediaElement
+        private bool _isGif;
+        public bool IsGif { get => _isGif; set { _isGif = value; OnPropertyChanged("IsGif"); OnPropertyChanged("GifPlayerVisibility"); OnPropertyChanged("PhotoVisibility"); OnPropertyChanged("VideoIconVisibility"); } }
+
+        private Uri _gifSource;
+        public Uri GifSource { get => _gifSource; set { _gifSource = value; OnPropertyChanged("GifSource"); OnPropertyChanged("GifPlayerVisibility"); } }
+        // GifPlayer показываем если это GIF (есть source или грузится)
+        public Visibility GifPlayerVisibility => IsGif ? Visibility.Visible : Visibility.Collapsed;
 
         // Документ
         private bool _isDocument;

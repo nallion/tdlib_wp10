@@ -409,7 +409,16 @@ namespace TelegramWP10
                                     { var t = ShowFullPhoto(fpath); }
                                 if (_messagesDict.ContainsKey(mid)) {
                                     var msgItem = _messagesDict[mid];
-                                    if (msgItem.IsVideo) {
+                                    if (msgItem.IsGif) {
+                                        bool isGifFile = _videoFileIds.ContainsKey(fid);
+                                        if (isCompleted && isGifFile && !string.IsNullOrEmpty(fpath)) {
+                                            msgItem.GifSource = new Uri(fpath);
+                                            msgItem.VideoDownloadProgress = null;
+                                        } else if (isGifFile && total > 0) {
+                                            int pct = (int)(downloaded * 100 / total);
+                                            msgItem.VideoDownloadProgress = "⏳ " + pct + "%";
+                                        }
+                                    } else if (msgItem.IsVideo) {
                                         bool isVideoFile = _videoFileIds.ContainsKey(fid);
                                         if (isCompleted && isVideoFile && !string.IsNullOrEmpty(fpath)) {
                                             msgItem.FilePath = fpath;
@@ -1050,17 +1059,21 @@ namespace TelegramWP10
                 } else if (type == "messageVideo") {
                     bool isAnim = content["video"]?["is_animation"]?.ToObject<bool>() ?? false;
                     item.IsVideo = !isAnim;
-                    if (isAnim) item.Text = "🎞 GIF"; // показываем лейбл если не будет превью
+                    item.IsGif = isAnim;
+                    if (isAnim) item.Text = "";
                     var videoFile = content["video"]?["video"] as JObject;
                     var thumb = content["video"]?["thumbnail"]?["file"] as JObject;
                     if (videoFile != null) {
                         long vfid = (long)videoFile["id"];
                         _fileToMsgId[vfid] = msgId;
-                        _videoFileIds[vfid] = msgId; // отдельно — только видеофайлы
+                        _videoFileIds[vfid] = msgId;
                         _messagesDict[msgId] = item;
                         string vPath = videoFile["local"]?["path"]?.ToString();
                         Log("VIDEO file id=" + vfid + " path=" + vPath);
-                        if (!string.IsNullOrEmpty(vPath)) item.FilePath = vPath;
+                        if (!string.IsNullOrEmpty(vPath)) {
+                            if (isAnim) item.GifSource = new Uri(vPath);
+                            else item.FilePath = vPath;
+                        }
                     }
                     if (thumb != null) {
                         long tfid = (long)thumb["id"];
@@ -1070,55 +1083,38 @@ namespace TelegramWP10
                             (tPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
                              tPath.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
                              tPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
-                        if (isImgThumb) {
+                        if (isImgThumb && !isAnim) {
                             _fileToMsgId[tfid] = msgId;
                             _messagesDict[msgId] = item;
-                            if (isAnim) item.Text = ""; // есть превью — убираем лейбл
                             var t = UpdateMessagePhoto(msgId, tPath);
-                        } else {
+                        } else if (!isImgThumb && !isAnim) {
                             _fileToMsgId[tfid] = msgId;
                             _messagesDict[msgId] = item;
                             TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + tfid + ",\"priority\":10,\"synchronous\":false}");
                         }
+                        // Для GIF тумбнейл не нужен — грузим сразу сам файл
                     }
                 } else if (type == "messageAnimation") {
-                    item.IsVideo = true;
+                    item.IsGif = true;
+                    item.IsVideo = false;
                     var animFile = content["animation"]?["animation"] as JObject;
-                    var animThumb = content["animation"]?["thumbnail"]?["file"] as JObject;
                     string animCaption = content["caption"]?["text"]?.ToString() ?? "";
-                    item.Text = !string.IsNullOrEmpty(animCaption) ? animCaption : "🎞 GIF";
+                    item.Text = animCaption; // пустой если нет подписи
                     if (animFile != null) {
                         long afid = (long)animFile["id"];
                         _fileToMsgId[afid] = msgId;
-                        _videoFileIds[afid] = msgId; // ФИКС: без этого updateFile не обновлял FilePath
+                        _videoFileIds[afid] = msgId;
                         _messagesDict[msgId] = item;
                         string aPath = animFile["local"]?["path"]?.ToString();
                         Log("ANIM file id=" + afid + " path=" + aPath);
-                        if (!string.IsNullOrEmpty(aPath)) item.FilePath = aPath;
-                        else TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + afid + ",\"priority\":10,\"synchronous\":false}");
-                    }
-                    if (animThumb != null) {
-                        long tfid = (long)animThumb["id"];
-                        string tPath = animThumb["local"]?["path"]?.ToString();
-                        Log("ANIM thumb id=" + tfid + " path=" + tPath);
-                        // Thumbnail может быть .mp4 — BitmapImage не умеет его декодировать
-                        bool isImgThumb = !string.IsNullOrEmpty(tPath) &&
-                            (tPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
-                             tPath.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
-                             tPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
-                        if (isImgThumb) {
-                            _fileToMsgId[tfid] = msgId;
-                            _messagesDict[msgId] = item;
-                            item.Text = ""; // есть превью — убираем лейбл
-                            var t = UpdateMessagePhoto(msgId, tPath);
-                        } else if (string.IsNullOrEmpty(tPath)) {
-                            // Скачиваем thumb только если он ещё не загружен — проверим формат потом
-                            _fileToMsgId[tfid] = msgId;
-                            _messagesDict[msgId] = item;
-                            TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + tfid + ",\"priority\":10,\"synchronous\":false}");
+                        if (!string.IsNullOrEmpty(aPath))
+                            item.GifSource = new Uri(aPath);
+                        else {
+                            item.VideoDownloadProgress = "⏳ 0%";
+                            TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + afid + ",\"priority\":10,\"synchronous\":false}");
                         }
-                        // иначе thumb.mp4 — игнорируем, пузырь покажет GIF-лейбл
                     }
+                    // Тумбнейл для GIF не нужен — MediaElement покажет сам файл
                 } else if (type == "messageDocument") {
                     var doc = content["document"];
                     var docFile = doc?["document"] as JObject;
