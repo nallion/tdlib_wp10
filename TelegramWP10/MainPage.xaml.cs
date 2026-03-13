@@ -195,8 +195,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var musicFolder = Windows.Storage.KnownFolders.MusicLibrary;
-                var appFolder = await musicFolder.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
+                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
+                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
