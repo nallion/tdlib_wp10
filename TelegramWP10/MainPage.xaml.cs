@@ -561,6 +561,23 @@ namespace TelegramWP10
                     }
                     break;
 
+                case "updateUnreadChatCount":
+                    // TDLib присылает готовый счётчик непрочитанных при старте — используем для бейджа архива
+                    if (update["chat_list"]?["@type"]?.ToString() == "chatListArchive") {
+                        int archiveUnread = update["unread_unmuted_count"]?.ToObject<int>() ?? 0;
+                        if (archiveUnread == 0)
+                            archiveUnread = update["unread_count"]?.ToObject<int>() ?? 0;
+                        if (archiveUnread > 0) {
+                            ArchiveUnreadText.Text = archiveUnread > 99 ? "99+" : archiveUnread.ToString();
+                            ArchiveUnreadBadge.Visibility = Visibility.Visible;
+                            ArchiveArrow.Visibility = Visibility.Collapsed;
+                        } else {
+                            ArchiveUnreadBadge.Visibility = Visibility.Collapsed;
+                            ArchiveArrow.Visibility = Visibility.Visible;
+                        }
+                    }
+                    break;
+
                 case "updateMessageInteractionInfo":
                     long umiChatId = update["chat_id"]?.ToObject<long>() ?? 0;
                     long umiMsgId = update["message_id"]?.ToObject<long>() ?? 0;
