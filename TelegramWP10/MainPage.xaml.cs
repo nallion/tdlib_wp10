@@ -1816,7 +1816,27 @@ namespace TelegramWP10
             if (chat == null) return;
             _pendingDeleteChatId = chat.Id;
             Log("HOLDING chatId=" + chat.Id + " title=" + chat.Title);
+            // Меняем текст пункта архива
+            var flyout = FlyoutBase.GetAttachedFlyout(grid) as MenuFlyout;
+            if (flyout != null) {
+                bool isInArchive = _archiveChatIds.Contains(chat.Id);
+                var archiveItem = flyout.Items.OfType<MenuFlyoutItem>()
+                    .FirstOrDefault(i => i.Name == "MenuArchiveChat");
+                if (archiveItem != null)
+                    archiveItem.Text = isInArchive ? "📤 Переместить из архива" : "📁 Переместить в архив";
+            }
             Windows.UI.Xaml.Controls.Primitives.FlyoutBase.ShowAttachedFlyout(grid);
+        }
+
+        private void ArchiveChat_Click(object sender, RoutedEventArgs e) {
+            if (_pendingDeleteChatId == 0) return;
+            long chatId = _pendingDeleteChatId;
+            _pendingDeleteChatId = 0;
+            bool isInArchive = _archiveChatIds.Contains(chatId);
+            string targetList = isInArchive ? "chatListMain" : "chatListArchive";
+            Log("ARCHIVE CHAT id=" + chatId + " target=" + targetList);
+            var req = "{\"@type\":\"addChatToList\",\"chat_id\":" + chatId + ",\"chat_list\":{\"@type\":\"" + targetList + "\"}}";
+            TdJson.SendUtf8(_client, req);
         }
 
         private async void DeleteChat_Click(object sender, RoutedEventArgs e) {

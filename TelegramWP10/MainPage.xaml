@@ -103,6 +103,7 @@
                         <Grid Margin="0,6" Holding="ChatItem_Holding">
                             <FlyoutBase.AttachedFlyout>
                                 <MenuFlyout>
+                                    <MenuFlyoutItem x:Name="MenuArchiveChat" Text="📁 Переместить в архив" Click="ArchiveChat_Click"/>
                                     <MenuFlyoutItem Text="🗑 Удалить переписку" Click="DeleteChat_Click"/>
                                 </MenuFlyout>
                             </FlyoutBase.AttachedFlyout>
