@@ -78,7 +78,7 @@ namespace TelegramWP10
             };
             // Таймер сброса "печатает..." — 5 секунд
             _typingTimer = new Windows.UI.Xaml.DispatcherTimer();
-            _typingTimer.Interval = TimeSpan.FromSeconds(5);
+            _typingTimer.Interval = TimeSpan.FromSeconds(7);
             _typingTimer.Tick += (s, e) => {
                 _typingTimer.Stop();
                 if (_currentChatId != 0 && _usersDict.ContainsKey(_currentChatId))
