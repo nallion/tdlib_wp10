@@ -430,6 +430,10 @@ namespace TelegramWP10
                             MessagesListView.UpdateLayout();
                             MessagesListView.ScrollIntoView(newItem);
                         }
+                        // Помечаем как прочитанное если чат открыт
+                        long newMsgId = newMsg["id"]?.ToObject<long>() ?? 0;
+                        if (newMsgId != 0)
+                            TdJson.SendUtf8(_client, "{\"@type\":\"viewMessages\",\"chat_id\":" + newMsgChatId + ",\"message_ids\":[" + newMsgId + "],\"force_read\":true}");
                     }
                     break;
 
