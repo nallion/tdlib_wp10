@@ -200,6 +200,8 @@
                                     Holding="MessageBubble_Holding">
                             <FlyoutBase.AttachedFlyout>
                                 <MenuFlyout>
+                                    <MenuFlyoutItem Text="↩ Ответить" Click="ReplyMessage_Click"/>
+                                    <MenuFlyoutItem Text="↪ Переслать" Click="ForwardMessage_Click"/>
                                     <MenuFlyoutItem Text="📋 Копировать текст" Click="CopyMessage_Click"/>
                                     <MenuFlyoutItem x:Name="MenuEdit" Text="✏ Редактировать" Click="EditMessage_Click"/>
                                     <MenuFlyoutItem x:Name="MenuDeleteSelf" Text="🗑 Удалить сообщение" Click="DeleteMessageSelf_Click"/>
@@ -362,7 +364,24 @@
                 <TextBlock Text="Загрузка..." Foreground="#888888" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,80,0,0"/>
             </Grid>
 
-            <Grid x:Name="InputGrid" Grid.Row="2" Padding="10" Background="#222222">
+            <StackPanel Grid.Row="2">
+                <!-- Панель предпросмотра цитаты -->
+                <Grid x:Name="ReplyPreviewPanel" Visibility="Collapsed" Background="#1A1A1A" Padding="10,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="↩ Ответить" Foreground="#0088cc" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="ReplyPreviewText" Text="" Foreground="#AAAAAA" FontSize="12"
+                                   TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="✕" Click="CancelReply_Click"
+                            Background="Transparent" Foreground="#888888" FontSize="14"
+                            Width="36" Height="36" Padding="0"/>
+                </Grid>
+
+                <Grid x:Name="InputGrid" Padding="10" Background="#222222">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
@@ -387,6 +406,53 @@
                 </TextBox>
                 <Button x:Name="SendButton" Grid.Column="3" Content="➤" Click="SendMessage_Click" Width="50" Height="40" Background="#0088cc" Foreground="White"/>
             </Grid>
+            </StackPanel>
+        </Grid>
+
+        <!-- Оверлей выбора чата для пересылки -->
+        <Grid x:Name="ForwardOverlay" Visibility="Collapsed" Background="#DD000000"
+              Grid.Row="0" Grid.RowSpan="2">
+            <Border Background="#222222" CornerRadius="12" Margin="20,60"
+                    VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <!-- Шапка -->
+                    <Grid Background="#0088cc" Padding="16,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Переслать в чат" Foreground="White" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="✕" Click="ForwardOverlay_Close"
+                                Background="Transparent" Foreground="White" FontSize="16" Width="40" Height="40" Padding="0"/>
+                    </Grid>
+                    <!-- Список чатов -->
+                    <ListView x:Name="ForwardChatList" Grid.Row="1"
+                              SelectionMode="None" IsItemClickEnabled="True"
+                              ItemClick="ForwardChatList_ItemClick">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Padding" Value="16,8"/>
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Width="40" Height="40" CornerRadius="20" Background="#555555" Margin="0,0,12,0">
+                                        <Image Source="{Binding Photo}" Stretch="UniformToFill" Width="40" Height="40"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="15"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Border>
         </Grid>
 
         <!-- Полноэкранный просмотр фото -->

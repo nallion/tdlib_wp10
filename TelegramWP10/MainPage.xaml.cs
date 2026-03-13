@@ -198,8 +198,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
+                var localFolder = Windows.Storage.KnownFolders.MusicLibrary;
+                var appFolder = await localFolder.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
@@ -1354,6 +1354,9 @@ namespace TelegramWP10
             _videoFileIds.Clear();
             _replyRequests.Clear();
             _editingMessageId = 0;
+            _replyToMessageId = 0;
+            ReplyPreviewPanel.Visibility = Visibility.Collapsed;
+            ReplyPreviewText.Text = "";
             _fullPhotoMsgId = 0;
             PhotoOverlay.Visibility = Visibility.Collapsed;
             PhotoOverlayImage.Source = null;
@@ -1380,6 +1383,58 @@ namespace TelegramWP10
             // openChat запускает синхронизацию истории с сервером
             TdJson.SendUtf8(_client, "{\"@type\":\"openChat\",\"chat_id\":" + _currentChatId + "}");
             TdJson.SendUtf8(_client, "{\"@type\":\"getChatHistory\",\"chat_id\":" + _currentChatId + ",\"from_message_id\":0,\"offset\":0,\"limit\":50}");
+        }
+
+        private void ForwardMessage_Click(object sender, RoutedEventArgs e) {
+            if (_pendingContextMsg == null) return;
+            // Заполняем список чатов — main + archive
+            var allChats = _chatListItems.Concat(_archiveChatItems).ToList();
+            ForwardChatList.ItemsSource = allChats;
+            ForwardOverlay.Visibility = Visibility.Visible;
+        }
+
+        private void ForwardOverlay_Close(object sender, RoutedEventArgs e) {
+            ForwardOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void ForwardChatList_ItemClick(object sender, ItemClickEventArgs e) {
+            var targetChat = e.ClickedItem as ChatItem;
+            if (targetChat == null || _pendingContextMsg == null) return;
+            ForwardOverlay.Visibility = Visibility.Collapsed;
+
+            long fromChatId = _currentChatId;
+            long msgId = _pendingContextMsg.Id;
+            _pendingContextMsg = null;
+
+            // forwardMessages с send_copy=false — сохраняет оригинального отправителя в заголовке
+            var req = new JObject {
+                ["@type"] = "forwardMessages",
+                ["chat_id"] = targetChat.Id,
+                ["from_chat_id"] = fromChatId,
+                ["message_ids"] = new JArray { msgId },
+                ["send_copy"] = false,
+                ["remove_caption"] = false
+            };
+            TdJson.SendUtf8(_client, req.ToString());
+            Log("FORWARD msgId=" + msgId + " from=" + fromChatId + " to=" + targetChat.Id);
+        }
+
+        private void ReplyMessage_Click(object sender, RoutedEventArgs e) {
+            var msg = _pendingContextMsg;
+            if (msg == null) return;
+            _replyToMessageId = msg.Id;
+            // Текст превью — первые 80 символов
+            string preview = string.IsNullOrEmpty(msg.Text) ? "(медиа)" : msg.Text;
+            if (preview.Length > 80) preview = preview.Substring(0, 80) + "…";
+            ReplyPreviewText.Text = preview;
+            ReplyPreviewPanel.Visibility = Visibility.Visible;
+            MessageInput.Focus(FocusState.Programmatic);
+        }
+
+        private void CancelReply_Click(object sender, RoutedEventArgs e) {
+            _replyToMessageId = 0;
+            ReplyPreviewPanel.Visibility = Visibility.Collapsed;
+            ReplyPreviewText.Text = "";
         }
 
         private void SendMessage_Click(object sender, RoutedEventArgs e) {
@@ -1417,6 +1472,15 @@ namespace TelegramWP10
                     ["text"] = new JObject { ["@type"] = "formattedText", ["text"] = text }
                 }
             };
+            if (_replyToMessageId != 0) {
+                sendReq["reply_to"] = new JObject {
+                    ["@type"] = "inputMessageReplyToMessage",
+                    ["message_id"] = _replyToMessageId
+                };
+                _replyToMessageId = 0;
+                ReplyPreviewPanel.Visibility = Visibility.Collapsed;
+                ReplyPreviewText.Text = "";
+            }
             TdJson.SendUtf8(_client, sendReq.ToString());
         }
 
@@ -1943,18 +2007,20 @@ namespace TelegramWP10
         }
 
         private MessageItem _selectedMessageForCopy = null;
+        private MessageItem _pendingContextMsg = null; // сообщение для Reply/Forward
 
         private void MessageBubble_Holding(object sender, Windows.UI.Xaml.Input.HoldingRoutedEventArgs e) {
             if (e.HoldingState != Windows.UI.Input.HoldingState.Started) return;
             var border = sender as Border;
             if (border == null) return;
             _selectedMessageForCopy = border.DataContext as MessageItem;
+            _pendingContextMsg = _selectedMessageForCopy;
 
             // Показываем/скрываем пункты редактирования и удаления в зависимости от типа сообщения
             var flyout = FlyoutBase.GetAttachedFlyout(border) as MenuFlyout;
             if (flyout != null) {
                 bool canEdit = _selectedMessageForCopy?.IsOutgoing == true && !string.IsNullOrEmpty(_selectedMessageForCopy?.Text);
-                bool canDelete = true; // удалять можно любое сообщение
+                bool canDelete = true;
                 foreach (var item in flyout.Items) {
                     if (item is MenuFlyoutItem mfi) {
                         if (mfi.Name == "MenuEdit") mfi.Visibility = canEdit ? Visibility.Visible : Visibility.Collapsed;
@@ -2047,6 +2113,7 @@ namespace TelegramWP10
         }
 
         private long _editingMessageId = 0;
+        private long _replyToMessageId = 0; // id сообщения на которое отвечаем
 
         private void MessageInput_Holding(object sender, Windows.UI.Xaml.Input.HoldingRoutedEventArgs e) {
             if (e.HoldingState != Windows.UI.Input.HoldingState.Started) return;
