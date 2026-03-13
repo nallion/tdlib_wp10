@@ -31,12 +31,58 @@
             <ListView x:Name="ChatListView" Grid.Row="1" Visibility="Collapsed" SelectionMode="None" IsItemClickEnabled="True" ItemClick="ChatListView_ItemClick">
                 <ListView.Header>
                     <StackPanel Background="#1A1A1A">
-                        <TextBlock Text="Unogram" Foreground="White" FontSize="28" FontWeight="Bold" Margin="15,15,15,2"/>
-                        <StackPanel Orientation="Horizontal" Margin="15,0,15,10">
-                            <TextBlock Text="Чатов: " Foreground="#888888" FontSize="13"/>
-                            <TextBlock x:Name="ChatCountText" Text="0" Foreground="#888888" FontSize="13"/>
-                            <TextBlock x:Name="ConnectionStatusText" Text="" Foreground="#FF6666" FontSize="13" Margin="8,0,0,0"/>
+                        <!-- Шапка главного списка -->
+                        <StackPanel x:Name="MainListHeader">
+                            <TextBlock Text="Unogram" Foreground="White" FontSize="28" FontWeight="Bold" Margin="15,15,15,2"/>
+                            <StackPanel Orientation="Horizontal" Margin="15,0,15,10">
+                                <TextBlock Text="Чатов: " Foreground="#888888" FontSize="13"/>
+                                <TextBlock x:Name="ChatCountText" Text="0" Foreground="#888888" FontSize="13"/>
+                                <TextBlock x:Name="ConnectionStatusText" Text="" Foreground="#FF6666" FontSize="13" Margin="8,0,0,0"/>
+                            </StackPanel>
                         </StackPanel>
+                        <!-- Шапка архива -->
+                        <StackPanel x:Name="ArchiveListHeader" Visibility="Collapsed">
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="ArchiveBackButton" Content="←" Click="ArchiveBack_Click"
+                                        Background="Transparent" Foreground="White" FontSize="22"
+                                        Padding="10,4,8,4" VerticalAlignment="Center" BorderThickness="0"/>
+                                <TextBlock Grid.Column="1" Text="Архив" Foreground="White"
+                                           FontSize="26" FontWeight="Bold"
+                                           VerticalAlignment="Center" Margin="0,0,0,4"/>
+                            </Grid>
+                            <TextBlock x:Name="ArchiveChatCountText" Text="" Foreground="#888888"
+                                       FontSize="13" Margin="15,0,15,10"/>
+                        </StackPanel>
+                        <!-- Строка "Архив" (в главном списке) -->
+                        <Border x:Name="ArchiveRow" Background="#222222" Tapped="ArchiveRow_Tapped"
+                                Margin="0,2,0,0" Padding="0">
+                            <Grid Margin="15,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="50"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <!-- Иконка папки -->
+                                <Border Width="42" Height="42" CornerRadius="21"
+                                        Background="#444444" HorizontalAlignment="Left">
+                                    <TextBlock Text="📁" FontSize="20"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Архив" Foreground="White"
+                                               FontSize="16" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="ArchiveSubtitleText" Text="архивированные чаты"
+                                               Foreground="#888888" FontSize="13"
+                                               TextTrimming="CharacterEllipsis" MaxLines="1" TextWrapping="NoWrap"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="›" Foreground="#888888"
+                                           FontSize="20" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </ListView.Header>
                 <ListView.ItemTemplate>

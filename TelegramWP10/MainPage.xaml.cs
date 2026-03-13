@@ -54,6 +54,10 @@ namespace TelegramWP10
         private long _pendingDeleteChatId = 0;
         private StorageFolder _filesFolder = null;
         private StorageFile _logFile = null;
+        private ObservableCollection<ChatItem> _archiveChatItems = new ObservableCollection<ChatItem>();
+        private bool _inArchive = false;
+        private bool _archiveLoaded = false;
+        private bool _loadingArchive = false;
 
         public MainPage()
         {
@@ -113,6 +117,9 @@ namespace TelegramWP10
                     e.Handled = true;
                 } else if (_currentChatId != 0) {
                     BackButton_Click(null, null);
+                    e.Handled = true;
+                } else if (_inArchive) {
+                    ArchiveBack_Click(null, null);
                     e.Handled = true;
                 }
             };
@@ -348,7 +355,15 @@ namespace TelegramWP10
                     // Непрочитанные
                     chatItem.UnreadCount = c["unread_count"]?.ToObject<int>() ?? 0;
                     // Если чат пришёл через LoadNextChat (из очереди) — добавляем в список
-                    if (_pendingChatIds.Count >= 0 && !_chatListItems.Contains(chatItem) && _loadingChats) {
+                    var positions = c["positions"] as JArray;
+                    bool isArchiveChat = positions != null && positions.Any(p => p["list"]?["@type"]?.ToString() == "chatListArchive");
+                    bool isMainChat = !isArchiveChat;
+
+                    if (_loadingArchive && isArchiveChat && !_archiveChatItems.Contains(chatItem)) {
+                        _archiveChatItems.Add(chatItem);
+                        ArchiveChatCountText.Text = "чатов: " + _archiveChatItems.Count;
+                        LoadNextChat();
+                    } else if (_loadingChats && isMainChat && !_chatListItems.Contains(chatItem)) {
                         _chatListItems.Add(chatItem);
                         ChatCountText.Text = _chatListItems.Count.ToString();
                         LoadNextChat(); // грузим следующий
@@ -619,11 +634,16 @@ namespace TelegramWP10
 
                 case "chats":
                     var chatIds = update["chat_ids"] as JArray;
-                    Log("chats received count=" + chatIds?.Count);
+                    Log("chats received count=" + chatIds?.Count + " archive=" + _loadingArchive);
                     if (chatIds != null) {
                         _pendingChatIds.Clear();
                         foreach (var cId in chatIds)
                             _pendingChatIds.Enqueue((long)cId);
+                        if (chatIds.Count == 0 && _loadingArchive) {
+                            // Архив пуст
+                            _loadingArchive = false;
+                            ArchiveChatCountText.Text = "архив пуст";
+                        }
                         LoadNextChat();
                     }
                     break;
@@ -737,6 +757,12 @@ namespace TelegramWP10
                     _loadingChats = false;
                     Log("All chats loaded, total=" + _chatListItems.Count);
                 }
+                if (_loadingArchive) {
+                    _loadingArchive = false;
+                    Log("All archive chats loaded, total=" + _archiveChatItems.Count);
+                    ArchiveChatCountText.Text = _archiveChatItems.Count == 0
+                        ? "архив пуст" : "чатов: " + _archiveChatItems.Count;
+                }
                 return;
             }
             long nextId = _pendingChatIds.Dequeue();
@@ -744,9 +770,17 @@ namespace TelegramWP10
                 Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                     if (_chatsDict.ContainsKey(nextId)) {
                         var existing = _chatsDict[nextId];
-                        if (!_chatListItems.Contains(existing)) {
-                            _chatListItems.Add(existing);
-                            ChatCountText.Text = _chatListItems.Count.ToString();
+                        // Определяем список по флагу загрузки
+                        if (_loadingArchive) {
+                            if (!_archiveChatItems.Contains(existing)) {
+                                _archiveChatItems.Add(existing);
+                                ArchiveChatCountText.Text = "чатов: " + _archiveChatItems.Count;
+                            }
+                        } else {
+                            if (!_chatListItems.Contains(existing)) {
+                                _chatListItems.Add(existing);
+                                ChatCountText.Text = _chatListItems.Count.ToString();
+                            }
                         }
                     } else {
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + nextId + "}");
@@ -756,10 +790,11 @@ namespace TelegramWP10
         }
 
         private void MoveChatToTop(long chatId) {
-            var item = _chatListItems.FirstOrDefault(c => c.Id == chatId);
-            if (item == null || _chatListItems.IndexOf(item) == 0) return;
-            _chatListItems.Remove(item);
-            _chatListItems.Insert(0, item);
+            var list = _inArchive ? _archiveChatItems : _chatListItems;
+            var item = list.FirstOrDefault(c => c.Id == chatId);
+            if (item == null || list.IndexOf(item) == 0) return;
+            list.Remove(item);
+            list.Insert(0, item);
         }
 
         private long _serverTimeOffset = 0;
@@ -1709,6 +1744,35 @@ namespace TelegramWP10
             MessagesListView.Visibility = Visibility.Visible;
             MessagesPanel.Visibility = Visibility.Collapsed;
             StartPanel.Visibility = Visibility.Visible;
+        }
+
+        private void ArchiveRow_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e) {
+            OpenArchive();
+        }
+
+        private void OpenArchive() {
+            _inArchive = true;
+            ChatListView.ItemsSource = _archiveChatItems;
+            MainListHeader.Visibility = Visibility.Collapsed;
+            ArchiveListHeader.Visibility = Visibility.Visible;
+            ArchiveRow.Visibility = Visibility.Collapsed;
+
+            if (!_archiveLoaded) {
+                _archiveLoaded = true;
+                _loadingArchive = true;
+                Log("getChats archive sent");
+                TdJson.SendUtf8(_client, "{\"@type\":\"getChats\",\"chat_list\":{\"@type\":\"chatListArchive\"},\"limit\":200}");
+            } else {
+                ArchiveChatCountText.Text = "чатов: " + _archiveChatItems.Count;
+            }
+        }
+
+        private void ArchiveBack_Click(object sender, RoutedEventArgs e) {
+            _inArchive = false;
+            ChatListView.ItemsSource = _chatListItems;
+            MainListHeader.Visibility = Visibility.Visible;
+            ArchiveListHeader.Visibility = Visibility.Collapsed;
+            ArchiveRow.Visibility = Visibility.Visible;
         }
 
         private void SendPhone_Click(object sender, RoutedEventArgs e) {
