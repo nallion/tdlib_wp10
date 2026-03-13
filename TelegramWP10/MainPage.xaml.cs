@@ -198,8 +198,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
+                var localFolder = Windows.Storage.KnownFolders.MusicLibrary;
+                var appFolder = await localFolder.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
@@ -498,6 +498,10 @@ namespace TelegramWP10
                     if (newMsgChatId == _currentChatId && newMsg != null && !_isLoadingHistory) {
                         var newItem = ParseMessage(newMsg);
                         if (newItem != null) {
+                            // Добавляем разделитель если это первое сообщение нового дня
+                            var lastReal = _messageItems.LastOrDefault(m => !m.IsSeparator);
+                            if (lastReal == null || lastReal.RawDate.Date != newItem.RawDate.Date)
+                                _messageItems.Add(MakeSeparator(newItem.RawDate.Date, DateTime.Today));
                             _messageItems.Add(newItem);
                             MessagesListView.UpdateLayout();
                             MessagesListView.ScrollIntoView(newItem);
@@ -756,6 +760,7 @@ namespace TelegramWP10
                             var it = ParseMessage(msgs[i]);
                             if (it != null) _messageItems.Add(it);
                         }
+                        InsertDateSeparators();
                         Log("rendered " + _messageItems.Count + " messages");
                         // Если получили меньше 50 — дозагружаем более старые
                         if (gotCount > 0 && gotCount < 50) {
@@ -775,6 +780,8 @@ namespace TelegramWP10
                                 var it = ParseMessage(msgs[i]);
                                 if (it != null) _messageItems.Insert(insertIdx++, it);
                             }
+                            // Перестраиваем разделители с учётом новых старых сообщений
+                            RebuildDateSeparators();
                             Log("prepended " + gotCount + " older messages, total=" + _messageItems.Count);
                         }
                     }
@@ -873,6 +880,44 @@ namespace TelegramWP10
                     }
                     LoadNextChat();
                 }));
+        }
+
+        // Вставляет разделители дат в _messageItems (полная перестройка)
+        private void InsertDateSeparators() {
+            var today = DateTime.Today;
+            DateTime? lastDate = null;
+            int i = 0;
+            while (i < _messageItems.Count) {
+                var item = _messageItems[i];
+                if (item.IsSeparator) { i++; continue; }
+                var msgDay = item.RawDate.Date;
+                if (lastDate == null || msgDay != lastDate.Value) {
+                    _messageItems.Insert(i, MakeSeparator(msgDay, today));
+                    i += 2;
+                } else {
+                    i++;
+                }
+                lastDate = msgDay;
+            }
+        }
+
+        // Удаляет все разделители и вставляет заново (после дозагрузки старых сообщений)
+        private void RebuildDateSeparators() {
+            for (int i = _messageItems.Count - 1; i >= 0; i--)
+                if (_messageItems[i].IsSeparator) _messageItems.RemoveAt(i);
+            InsertDateSeparators();
+        }
+
+        private MessageItem MakeSeparator(DateTime day, DateTime today) {
+            string label;
+            int diff = (today - day).Days;
+            if (diff == 0)       label = "Сегодня";
+            else if (diff == 1)  label = "Вчера";
+            else if (diff == 2)  label = "Позавчера";
+            else if (day.Year == today.Year)
+                                 label = day.ToString("d MMMM", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+            else                 label = day.ToString("d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+            return new MessageItem { IsSeparator = true, SeparatorLabel = label };
         }
 
         private void MoveChatToTop(long chatId) {
@@ -1019,10 +1064,12 @@ namespace TelegramWP10
 
                 bool outgoing = (bool)msg["is_outgoing"];
                 var senderId = msg["sender_id"];
+                var msgDate = DateTimeOffset.FromUnixTimeSeconds((long)msg["date"]).LocalDateTime;
                 var item = new MessageItem {
                     Id = msgId, Text = txt,
                     Entities = entities.Count > 0 ? entities : null,
-                    Date = DateTimeOffset.FromUnixTimeSeconds((long)msg["date"]).LocalDateTime.ToString("HH:mm"),
+                    RawDate = msgDate,
+                    Date = msgDate.ToString("HH:mm"),
                     Alignment = outgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left,
                     Background = outgoing ? "#0088cc" : "#333333",
                     IsOutgoing = outgoing,

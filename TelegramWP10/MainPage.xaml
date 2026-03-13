@@ -184,8 +184,19 @@
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}"
-                                Holding="MessageBubble_Holding">
+                        <StackPanel>
+                            <!-- Разделитель дат -->
+                            <Border Visibility="{Binding SeparatorVisibility}" HorizontalAlignment="Stretch" Margin="0,6,0,6">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <Border Background="#44FFFFFF" CornerRadius="10" Padding="12,4">
+                                        <TextBlock Text="{Binding SeparatorLabel}" FontSize="12" Foreground="#CCFFFFFF" FontWeight="SemiBold"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                            <!-- Пузырь сообщения -->
+                            <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}"
+                                    Visibility="{Binding MessageVisibility}"
+                                    Holding="MessageBubble_Holding">
                             <FlyoutBase.AttachedFlyout>
                                 <MenuFlyout>
                                     <MenuFlyoutItem Text="📋 Копировать текст" Click="CopyMessage_Click"/>
@@ -300,7 +311,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Date}" FontSize="10" Foreground="#AAAAAA" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Date}" FontSize="10" Foreground="#CCFFFFFF" VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="1" Text="{Binding ReadStatusText}" FontSize="10" Margin="4,0,0,0"
                                                Foreground="#BBFFFFFF" VerticalAlignment="Center"
                                                Visibility="{Binding ReadStatusVisibility}"/>
@@ -340,6 +351,7 @@
                                 </ItemsControl>
                             </StackPanel>
                         </Border>
+                        </StackPanel>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>

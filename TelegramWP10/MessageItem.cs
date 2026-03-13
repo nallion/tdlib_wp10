@@ -127,6 +127,15 @@ namespace TelegramWP10
         // Entities для ссылок
         public List<MessageEntity> Entities { get; set; }
 
+        // Дата сообщения для вычисления разделителей
+        public DateTime RawDate { get; set; }
+
+        // Разделитель дат между сообщениями разных дней
+        public bool IsSeparator { get; set; } = false;
+        public string SeparatorLabel { get; set; } = "";
+        public Visibility SeparatorVisibility => IsSeparator ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility MessageVisibility => IsSeparator ? Visibility.Collapsed : Visibility.Visible;
+
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
