@@ -30,6 +30,7 @@ namespace TelegramWP10
         private bool _currentChatIsGroup = false;
         private Windows.UI.Xaml.DispatcherTimer _statusTimer;
         private Windows.UI.Xaml.DispatcherTimer _audioPositionTimer;
+        private Windows.UI.Xaml.DispatcherTimer _typingTimer;
         private bool _audioSliderDragging = false;
         private long _pendingHistoryChatId = 0;
         private int _historyRetryCount = 0;
@@ -74,6 +75,16 @@ namespace TelegramWP10
             _statusTimer.Tick += (s, e) => {
                 if (_currentChatId != 0 && _usersDict.ContainsKey(_currentChatId))
                     UpdateChatStatus(_usersDict[_currentChatId]["status"]);
+            };
+            // Таймер сброса "печатает..." — 5 секунд
+            _typingTimer = new Windows.UI.Xaml.DispatcherTimer();
+            _typingTimer.Interval = TimeSpan.FromSeconds(5);
+            _typingTimer.Tick += (s, e) => {
+                _typingTimer.Stop();
+                if (_currentChatId != 0 && _usersDict.ContainsKey(_currentChatId))
+                    UpdateChatStatus(_usersDict[_currentChatId]["status"]);
+                else if (_currentChatId != 0)
+                    CurrentChatStatus.Text = "";
             };
             _statusTimer.Start();
             // Таймер обновления позиции аудио (каждые 500мс)
@@ -465,6 +476,17 @@ namespace TelegramWP10
                         // Обновляем шапку если открыт чат с этим пользователем
                         if (uid == _currentChatId)
                             UpdateChatStatus(user["status"]);
+                    }
+                    break;
+
+                case "updateChatAction":
+                    long actionChatId = update["chat_id"]?.ToObject<long>() ?? 0;
+                    string actionType = update["action"]?["@type"]?.ToString() ?? "";
+                    if (actionChatId == _currentChatId && actionType == "chatActionTyping") {
+                        CurrentChatStatus.Text = "печатает...";
+                        CurrentChatStatus.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.LightGreen);
+                        _typingTimer.Stop();
+                        _typingTimer.Start();
                     }
                     break;
 
