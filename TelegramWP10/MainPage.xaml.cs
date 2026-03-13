@@ -197,8 +197,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
+                var localFolder = Windows.Storage.KnownFolders.MusicLibrary;
+                var appFolder = await localFolder.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
@@ -861,7 +861,9 @@ namespace TelegramWP10
                             }
                         }
                     } else {
+                        // Чат ещё не известен — запрашиваем, updateNewChat вызовет LoadNextChat сам
                         TdJson.SendUtf8(_client, "{\"@type\":\"getChat\",\"chat_id\":" + nextId + "}");
+                        return; // не вызываем LoadNextChat здесь — иначе двойной поток
                     }
                     LoadNextChat();
                 }));
