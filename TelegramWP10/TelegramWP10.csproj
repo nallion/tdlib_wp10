@@ -41,15 +41,6 @@
     <PackageReference Include="Newtonsoft.Json">
       <Version>13.0.1</Version>
     </PackageReference>
-    <PackageReference Include="SkiaSharp">
-      <Version>2.88.8</Version>
-    </PackageReference>
-    <!-- Явно подавляем автоматическое добавление нативных файлов SkiaSharp в APPX.
-         Нужные нативы (libSkiaSharp.dll) копируем через Target ниже, zlib1.dll — пропускаем. -->
-    <PackageReference Include="SkiaSharp.NativeAssets.UWP">
-      <Version>2.88.8</Version>
-      <ExcludeAssets>all</ExcludeAssets>
-    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
@@ -88,6 +79,9 @@
     <Content Include="zlib1.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="libwebp.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
@@ -124,21 +118,6 @@
           Command="SignTool.exe sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;$(AppxPath)&quot;" />
     
     <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА: $(AppxPath) ---" />
-  </Target>
-
-  <!-- SkiaSharp.NativeAssets.UWP отключён (ExcludeAssets=all) чтобы не конфликтовал с zlib1.dll TDLib.
-       Копируем libSkiaSharp.dll вручную из пакета. -->
-  <Target Name="CopySkiaSharpNative" AfterTargets="ResolvePackageAssets">
-    <PropertyGroup>
-      <SkiaNativePath>$(USERPROFILE)\.nuget\packages\skiasharp.nativeassets.uwp\2.88.8\runtimes\win10-arm\nativeassets\uap10.0</SkiaNativePath>
-    </PropertyGroup>
-    <ItemGroup>
-      <Content Include="$(SkiaNativePath)\libSkiaSharp.dll"
-               Condition="Exists('$(SkiaNativePath)\libSkiaSharp.dll')">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>libSkiaSharp.dll</Link>
-      </Content>
-    </ItemGroup>
   </Target>
 
 </Project>

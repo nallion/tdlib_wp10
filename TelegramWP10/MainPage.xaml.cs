@@ -1439,27 +1439,52 @@ namespace TelegramWP10
             } catch (Exception ex) { Log("UpdateMsgPhoto ERR msg=" + msgId + " | " + ex.Message); }
         }
 
-        // Декодирует WebP через SkiaSharp и возвращает BitmapImage через PNG в памяти
+        // P/Invoke к libwebp.dll — декодируем WebP в BGRA и рисуем в WriteableBitmap
+        [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPDecodeBGRA", CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
+        private static extern System.IntPtr WebPDecodeBGRA(
+            [System.Runtime.InteropServices.In] byte[] data,
+            System.UIntPtr data_size,
+            ref int width,
+            ref int height);
+
+        [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPFree", CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
+        private static extern void WebPFree(System.IntPtr ptr);
+
         private async Task<BitmapImage> DecodeWebPAsync(string path) {
             try {
                 var bytes = await Task.Run(() => System.IO.File.ReadAllBytes(path));
-                using (var skBitmap = SkiaSharp.SKBitmap.Decode(bytes)) {
-                    if (skBitmap == null) { Log("DecodeWebP SKBitmap null path=" + path); return null; }
-                    using (var skImg = SkiaSharp.SKImage.FromBitmap(skBitmap))
-                    using (var skData = skImg.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100)) {
-                        var ras = new InMemoryRandomAccessStream();
-                        using (var writer = new DataWriter(ras.GetOutputStreamAt(0)))
-                        {
-                            writer.WriteBytes(skData.ToArray());
-                            await writer.StoreAsync();
-                        }
-                        ras.Seek(0);
-                        var bmp = new BitmapImage();
-                        await bmp.SetSourceAsync(ras);
-                        return bmp;
-                    }
+                int width = 0, height = 0;
+                var ptr = WebPDecodeBGRA(bytes, (System.UIntPtr)bytes.Length, ref width, ref height);
+                if (ptr == System.IntPtr.Zero) {
+                    Log("DecodeWebP: WebPDecodeBGRA returned null path=" + path);
+                    return null;
                 }
-            } catch (Exception ex) { Log("DecodeWebP ERR path=" + path + " | " + ex.Message); return null; }
+                try {
+                    // Копируем BGRA пиксели из нативной памяти
+                    int stride = width * 4;
+                    var pixelData = new byte[stride * height];
+                    System.Runtime.InteropServices.Marshal.Copy(ptr, pixelData, 0, pixelData.Length);
+
+                    // Конвертируем BGRA пиксели → PNG → BitmapImage
+                    var ras = new InMemoryRandomAccessStream();
+                    var enc = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
+                        Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, ras);
+                    enc.SetPixelData(
+                        Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                        Windows.Graphics.Imaging.BitmapAlphaMode.Straight,
+                        (uint)width, (uint)height, 96, 96, pixelData);
+                    await enc.FlushAsync();
+                    ras.Seek(0);
+                    var bmp = new BitmapImage();
+                    await bmp.SetSourceAsync(ras);
+                    return bmp;
+                } finally {
+                    WebPFree(ptr);
+                }
+            } catch (Exception ex) {
+                Log("DecodeWebP ERR path=" + path + " | " + ex.Message);
+                return null;
+            }
         }
 
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
