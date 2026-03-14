@@ -1439,22 +1439,60 @@ namespace TelegramWP10
             } catch (Exception ex) { Log("UpdateMsgPhoto ERR msg=" + msgId + " | " + ex.Message); }
         }
 
-        // P/Invoke к libwebp.dll — декодируем WebP в BGRA и рисуем в WriteableBitmap
-        [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPDecodeBGRA", CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
-        private static extern System.IntPtr WebPDecodeBGRA(
+        // Ленивая загрузка libwebp через LoadLibrary — не вылетаем если DLL отсутствует
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern System.IntPtr LoadLibrary(string lpFileName);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern System.IntPtr GetProcAddress(System.IntPtr hModule, string lpProcName);
+
+        private delegate System.IntPtr WebPDecodeBGRADelegate(
             [System.Runtime.InteropServices.In] byte[] data,
             System.UIntPtr data_size,
             ref int width,
             ref int height);
 
-        [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPFree", CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
-        private static extern void WebPFree(System.IntPtr ptr);
+        private delegate void WebPFreeDelegate(System.IntPtr ptr);
+
+        private System.IntPtr _libWebP = System.IntPtr.Zero;
+        private WebPDecodeBGRADelegate _webPDecodeBGRA = null;
+        private WebPFreeDelegate _webPFree = null;
+        private bool _libWebPLoaded = false;
+
+        private bool LoadLibWebP() {
+            if (_libWebPLoaded) return _libWebP != System.IntPtr.Zero;
+            _libWebPLoaded = true;
+            try {
+                _libWebP = LoadLibrary("libwebp.dll");
+                if (_libWebP == System.IntPtr.Zero) {
+                    Log("LoadLibWebP: LoadLibrary failed err=" + System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                    return false;
+                }
+                var pDecode = GetProcAddress(_libWebP, "WebPDecodeBGRA");
+                var pFree   = GetProcAddress(_libWebP, "WebPFree");
+                if (pDecode == System.IntPtr.Zero || pFree == System.IntPtr.Zero) {
+                    Log("LoadLibWebP: GetProcAddress failed");
+                    return false;
+                }
+                _webPDecodeBGRA = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<WebPDecodeBGRADelegate>(pDecode);
+                _webPFree       = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<WebPFreeDelegate>(pFree);
+                Log("LoadLibWebP: OK");
+                return true;
+            } catch (Exception ex) {
+                Log("LoadLibWebP ERR: " + ex.Message);
+                return false;
+            }
+        }
 
         private async Task<BitmapImage> DecodeWebPAsync(string path) {
             try {
+                if (!LoadLibWebP()) {
+                    Log("DecodeWebP: libwebp not available, path=" + path);
+                    return null;
+                }
                 var bytes = await Task.Run(() => System.IO.File.ReadAllBytes(path));
                 int width = 0, height = 0;
-                var ptr = WebPDecodeBGRA(bytes, (System.UIntPtr)bytes.Length, ref width, ref height);
+                var ptr = _webPDecodeBGRA(bytes, (System.UIntPtr)bytes.Length, ref width, ref height);
                 if (ptr == System.IntPtr.Zero) {
                     Log("DecodeWebP: WebPDecodeBGRA returned null path=" + path);
                     return null;
@@ -1479,7 +1517,7 @@ namespace TelegramWP10
                     await bmp.SetSourceAsync(ras);
                     return bmp;
                 } finally {
-                    WebPFree(ptr);
+                    _webPFree(ptr);
                 }
             } catch (Exception ex) {
                 Log("DecodeWebP ERR path=" + path + " | " + ex.Message);
