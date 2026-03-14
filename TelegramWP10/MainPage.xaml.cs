@@ -1318,8 +1318,10 @@ namespace TelegramWP10
                             _messagesDict[msgId] = item;
                             string sPath = stickerFile["local"]?["path"]?.ToString();
                             Log("STICKER msg=" + msgId + " file_id=" + sfid + " remote_uid=" + remoteUid + " path=" + sPath);
-                            if (!string.IsNullOrEmpty(sPath))
+                            if (!string.IsNullOrEmpty(sPath)) {
+                                Log("STICKER calling UpdateMessagePhoto msg=" + msgId);
                                 { var t = UpdateMessagePhoto(msgId, sPath); }
+                            }
                             else
                                 TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + sfid + ",\"priority\":10,\"synchronous\":false}");
                         }
@@ -1469,8 +1471,8 @@ namespace TelegramWP10
                     Log("EnsureLibWebP: GetProcAddress failed");
                     return false;
                 }
-                _webPDecodeBGRA = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<WebPDecodeBGRADelegate>(pDecode);
-                _webPFree       = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<WebPFreeDelegate>(pFree);
+                _webPDecodeBGRA = (WebPDecodeBGRADelegate)System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer(pDecode, typeof(WebPDecodeBGRADelegate));
+                _webPFree       = (WebPFreeDelegate)System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer(pFree, typeof(WebPFreeDelegate));
                 Log("EnsureLibWebP: OK");
                 return true;
             } catch (Exception ex) {
