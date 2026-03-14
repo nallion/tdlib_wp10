@@ -101,9 +101,23 @@
     </Page>
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="Properties\Default.rd.xml" />
-  </ItemGroup>
+  <!-- Генерируем rd.xml на лету — не нужно хранить в репозитории -->
+  <Target Name="GenerateRdXml" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <RdXmlPath>$(ProjectDir)Properties\Default.rd.xml</RdXmlPath>
+      <RdXmlContent><![CDATA[<Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
+  <Application>
+    <Assembly Name="TelegramWP10" Dynamic="Required All" />
+    <Assembly Name="Newtonsoft.Json" Dynamic="Required All" />
+  </Application>
+</Directives>]]></RdXmlContent>
+    </PropertyGroup>
+    <MakeDir Directories="$(ProjectDir)Properties" />
+    <WriteLinesToFile File="$(RdXmlPath)" Lines="$(RdXmlContent)" Overwrite="true" />
+    <ItemGroup>
+      <Content Include="$(RdXmlPath)" />
+    </ItemGroup>
+  </Target>
 
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
 
