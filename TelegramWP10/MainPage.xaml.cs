@@ -198,8 +198,8 @@ namespace TelegramWP10
 
         private async void InitAsync() {
             try {
-                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-                var appFolder = await localFolder.CreateFolderAsync("Unogram", CreationCollisionOption.OpenIfExists);
+                var localFolder = Windows.Storage.KnownFolders.MusicLibrary;
+                var appFolder = await localFolder.CreateFolderAsync("TelegramWP10", CreationCollisionOption.OpenIfExists);
                 _dbPath = appFolder.Path.Replace("\\", "/") + "/td_db";
                 _filesFolder = await appFolder.CreateFolderAsync("td_db_files", CreationCollisionOption.OpenIfExists);
                 string logName = "log_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt";
@@ -390,8 +390,14 @@ namespace TelegramWP10
                     if (lastMsg != null) FillChatLastMessage(chatItem, lastMsg, c);
                     // Непрочитанные
                     chatItem.UnreadCount = c["unread_count"]?.ToObject<int>() ?? 0;
-                    // Если чат пришёл через LoadNextChat (из очереди) — добавляем в список
+                    // Закреплён ли чат — берём из positions нужного списка
                     var positions = c["positions"] as JArray;
+                    if (positions != null) {
+                        string targetListType = isArchiveChat ? "chatListArchive" : "chatListMain";
+                        var pos = positions.FirstOrDefault(p => p["list"]?["@type"]?.ToString() == targetListType
+                                  || p["list"]?["@type"]?.ToString() == "chatListMain");
+                        chatItem.IsPinned = pos?["is_pinned"]?.ToObject<bool>() ?? false;
+                    }
                     // _archiveChatIds заполняется ДО загрузки главного списка — надёжнее чем positions
                     // (при bump positions уже содержит chatListMain вместо chatListArchive)
                     bool isArchiveChat = _archiveChatIds.Contains(chatId) ||
@@ -588,6 +594,22 @@ namespace TelegramWP10
                         Log("updateChatLastMessage chat=" + ulcId + " content=" + ulcType);
                         FillChatLastMessage(_chatsDict[ulcId], ulcMsg, update);
                         MoveChatToTop(ulcId);
+                    }
+                    break;
+
+                case "updateChatPosition":
+                    long ucpId = update["chat_id"]?.ToObject<long>() ?? 0;
+                    if (ucpId != 0 && _chatsDict.ContainsKey(ucpId)) {
+                        var ucpPos = update["position"];
+                        bool ucpPinned = ucpPos?["is_pinned"]?.ToObject<bool>() ?? false;
+                        _chatsDict[ucpId].IsPinned = ucpPinned;
+                        // Перемещаем закреплённый чат наверх / открепленный на своё место
+                        if (ucpPinned) {
+                            var list = _archiveChatItems.Any(ch => ch.Id == ucpId) ? _archiveChatItems : _chatListItems;
+                            var item = list.FirstOrDefault(ch => ch.Id == ucpId);
+                            if (item != null && list.IndexOf(item) != 0) { list.Remove(item); list.Insert(0, item); }
+                        }
+                        Log("updateChatPosition chat=" + ucpId + " pinned=" + ucpPinned);
                     }
                     break;
 
@@ -1910,16 +1932,36 @@ namespace TelegramWP10
             if (chat == null) return;
             _pendingDeleteChatId = chat.Id;
             Log("HOLDING chatId=" + chat.Id + " title=" + chat.Title);
-            // Меняем текст пункта архива
+            // Меняем текст пунктов меню по состоянию чата
             var flyout = FlyoutBase.GetAttachedFlyout(grid) as MenuFlyout;
             if (flyout != null) {
                 bool isInArchive = _archiveChatIds.Contains(chat.Id);
-                var archiveItem = flyout.Items.OfType<MenuFlyoutItem>()
-                    .FirstOrDefault(i => i.Name == "MenuArchiveChat");
-                if (archiveItem != null)
-                    archiveItem.Text = isInArchive ? "📤 Переместить из архива" : "📁 Переместить в архив";
+                bool isPinned = chat.IsPinned;
+                foreach (var fi in flyout.Items.OfType<MenuFlyoutItem>()) {
+                    if (fi.Name == "MenuArchiveChat")
+                        fi.Text = isInArchive ? "📤 Переместить из архива" : "📁 Переместить в архив";
+                    if (fi.Name == "MenuPinChat")
+                        fi.Text = isPinned ? "📌 Открепить" : "📌 Закрепить";
+                }
             }
             Windows.UI.Xaml.Controls.Primitives.FlyoutBase.ShowAttachedFlyout(grid);
+        }
+
+        private void PinChat_Click(object sender, RoutedEventArgs e) {
+            if (_pendingDeleteChatId == 0) return;
+            long chatId = _pendingDeleteChatId;
+            _pendingDeleteChatId = 0;
+            if (!_chatsDict.ContainsKey(chatId)) return;
+            bool newPinned = !_chatsDict[chatId].IsPinned;
+            string listType = _archiveChatIds.Contains(chatId) ? "chatListArchive" : "chatListMain";
+            Log("PIN CHAT id=" + chatId + " pin=" + newPinned);
+            var req = new JObject {
+                ["@type"] = "toggleChatIsPinned",
+                ["chat_list"] = new JObject { ["@type"] = listType },
+                ["chat_id"] = chatId,
+                ["is_pinned"] = newPinned
+            };
+            TdJson.SendUtf8(_client, req.ToString());
         }
 
         private void ArchiveChat_Click(object sender, RoutedEventArgs e) {

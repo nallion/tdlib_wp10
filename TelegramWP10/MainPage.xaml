@@ -103,6 +103,7 @@
                         <Grid Margin="0,6" Holding="ChatItem_Holding">
                             <FlyoutBase.AttachedFlyout>
                                 <MenuFlyout>
+                                    <MenuFlyoutItem x:Name="MenuPinChat" Text="📌 Закрепить" Click="PinChat_Click"/>
                                     <MenuFlyoutItem x:Name="MenuArchiveChat" Text="📁 Переместить в архив" Click="ArchiveChat_Click"/>
                                     <MenuFlyoutItem Text="🗑 Удалить переписку" Click="DeleteChat_Click"/>
                                 </MenuFlyout>
@@ -131,7 +132,12 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="📌 " FontSize="12" Foreground="#888888"
+                                                   Visibility="{Binding PinVisibility}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Title}" Foreground="White" FontSize="16" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                     <TextBlock Grid.Column="1" Text="{Binding LastMessageTime}" Foreground="#888888" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,0,0"/>
                                 </Grid>
                                 <!-- Строка 2: последнее сообщение + бейдж непрочитанных -->
