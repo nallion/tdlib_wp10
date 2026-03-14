@@ -1418,17 +1418,41 @@ namespace TelegramWP10
 
         private async Task UpdateMessagePhoto(long msgId, string path) {
             try {
-                var file = await StorageFile.GetFileFromPathAsync(path);
-                var bitmap = new BitmapImage();
-                using (var stream = await file.OpenReadAsync())
-                    await bitmap.SetSourceAsync(stream);
-                if (_messagesDict.ContainsKey(msgId)) {
+                BitmapImage bitmap;
+                if (path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
+                    bitmap = await DecodeWebPAsync(path);
+                else {
+                    var file = await StorageFile.GetFileFromPathAsync(path);
+                    bitmap = new BitmapImage();
+                    using (var stream = await file.OpenReadAsync())
+                        await bitmap.SetSourceAsync(stream);
+                }
+                if (bitmap != null && _messagesDict.ContainsKey(msgId)) {
                     _messagesDict[msgId].AttachedPhoto = bitmap;
                     Log("UpdateMsgPhoto OK msg=" + msgId);
+                } else if (bitmap == null) {
+                    Log("UpdateMsgPhoto NULL bitmap msg=" + msgId);
                 } else {
                     Log("UpdateMsgPhoto NOT IN DICT msg=" + msgId);
                 }
             } catch (Exception ex) { Log("UpdateMsgPhoto ERR msg=" + msgId + " | " + ex.Message); }
+        }
+
+        // Декодирует WebP через SkiaSharp и возвращает BitmapImage через PNG в памяти
+        private async Task<BitmapImage> DecodeWebPAsync(string path) {
+            try {
+                var bytes = await Task.Run(() => System.IO.File.ReadAllBytes(path));
+                using (var skBitmap = SkiaSharp.SKBitmap.Decode(bytes)) {
+                    if (skBitmap == null) { Log("DecodeWebP SKBitmap null path=" + path); return null; }
+                    using (var skImg = SkiaSharp.SKImage.FromBitmap(skBitmap))
+                    using (var skData = skImg.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100)) {
+                        var ms = new System.IO.MemoryStream(skData.ToArray());
+                        var bmp = new BitmapImage();
+                        await bmp.SetSourceAsync(ms.AsRandomAccessStream());
+                        return bmp;
+                    }
+                }
+            } catch (Exception ex) { Log("DecodeWebP ERR path=" + path + " | " + ex.Message); return null; }
         }
 
         private void ChatListView_ItemClick(object sender, ItemClickEventArgs e) {
