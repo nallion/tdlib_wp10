@@ -1439,9 +1439,12 @@ namespace TelegramWP10
             } catch (Exception ex) { Log("UpdateMsgPhoto ERR msg=" + msgId + " | " + ex.Message); }
         }
 
-        // UWP sandbox не позволяет LoadLibrary — используем LoadPackagedLibrary
-        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        // UWP: LoadPackagedLibrary для DLL из пакета приложения
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
         private static extern System.IntPtr LoadPackagedLibrary(string lpwLibFileName, uint reserved);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern System.IntPtr LoadLibraryExW(string lpLibFileName, System.IntPtr hFile, uint dwFlags);
 
         [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
         private static extern System.IntPtr GetProcAddress(System.IntPtr hModule, string lpProcName);
@@ -1463,7 +1466,15 @@ namespace TelegramWP10
             if (_libWebPLoaded) return _libWebP != System.IntPtr.Zero;
             _libWebPLoaded = true;
             try {
+                // Сначала пробуем LoadPackagedLibrary (UWP способ)
                 _libWebP = LoadPackagedLibrary("libwebp.dll", 0);
+                if (_libWebP == System.IntPtr.Zero) {
+                    // Fallback: LoadLibraryExW с полным путём из папки установленного пакета
+                    string pkgPath = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
+                    string fullPath = System.IO.Path.Combine(pkgPath, "libwebp.dll");
+                    Log("LoadLibWebP: trying full path=" + fullPath);
+                    _libWebP = LoadLibraryExW(fullPath, System.IntPtr.Zero, 0);
+                }
                 if (_libWebP == System.IntPtr.Zero) {
                     Log("LoadLibWebP: LoadLibrary failed err=" + System.Runtime.InteropServices.Marshal.GetLastWin32Error());
                     return false;
