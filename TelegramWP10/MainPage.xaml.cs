@@ -1447,9 +1447,15 @@ namespace TelegramWP10
                     if (skBitmap == null) { Log("DecodeWebP SKBitmap null path=" + path); return null; }
                     using (var skImg = SkiaSharp.SKImage.FromBitmap(skBitmap))
                     using (var skData = skImg.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100)) {
-                        var ms = new System.IO.MemoryStream(skData.ToArray());
+                        var ras = new InMemoryRandomAccessStream();
+                        using (var writer = new DataWriter(ras.GetOutputStreamAt(0)))
+                        {
+                            writer.WriteBytes(skData.ToArray());
+                            await writer.StoreAsync();
+                        }
+                        ras.Seek(0);
                         var bmp = new BitmapImage();
-                        await bmp.SetSourceAsync(ms.AsRandomAccessStream());
+                        await bmp.SetSourceAsync(ras);
                         return bmp;
                     }
                 }
