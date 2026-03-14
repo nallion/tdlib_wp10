@@ -44,9 +44,6 @@
     <PackageReference Include="SkiaSharp">
       <Version>2.88.8</Version>
     </PackageReference>
-    <PackageReference Include="SkiaSharp.Views.UWP">
-      <Version>2.88.8</Version>
-    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
