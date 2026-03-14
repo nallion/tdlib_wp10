@@ -1439,47 +1439,57 @@ namespace TelegramWP10
             } catch (Exception ex) { Log("UpdateMsgPhoto ERR msg=" + msgId + " | " + ex.Message); }
         }
 
-        // P/Invoke к libwebp.dll
-        [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPDecodeBGRA",
-            CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
-        private static extern System.IntPtr WebPDecodeBGRA(
-            byte[] data, System.UIntPtr data_size, ref int width, ref int height);
+        // Вложенный класс — DLL загружается только при первом вызове Decode(),
+        // то есть только когда реально рендерится стикер
+        private static class WebPDecoder {
+            [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPDecodeBGRA",
+                CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
+            private static extern System.IntPtr WebPDecodeBGRA(
+                byte[] data, System.UIntPtr size, ref int width, ref int height);
 
-        [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPFree",
-            CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
-        private static extern void WebPFree(System.IntPtr ptr);
+            [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPFree",
+                CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
+            private static extern void WebPFree(System.IntPtr ptr);
+
+            // Возвращает BGRA пиксели или null при ошибке
+            public static byte[] Decode(byte[] data, out int width, out int height) {
+                width = 0; height = 0;
+                var ptr = WebPDecodeBGRA(data, (System.UIntPtr)data.Length, ref width, ref height);
+                if (ptr == System.IntPtr.Zero) return null;
+                try {
+                    var pixels = new byte[width * height * 4];
+                    System.Runtime.InteropServices.Marshal.Copy(ptr, pixels, 0, pixels.Length);
+                    return pixels;
+                } finally {
+                    WebPFree(ptr);
+                }
+            }
+        }
 
         private async Task<BitmapImage> DecodeWebPAsync(string path) {
             try {
                 var bytes = await Task.Run(() => System.IO.File.ReadAllBytes(path));
-                int width = 0, height = 0;
-                var ptr = WebPDecodeBGRA(bytes, (System.UIntPtr)bytes.Length, ref width, ref height);
-                if (ptr == System.IntPtr.Zero) {
-                    Log("DecodeWebP: WebPDecodeBGRA returned null path=" + path);
+                int w = 0, h = 0;
+                byte[] pixels = null;
+                // libwebp.dll загружается здесь — только при рендере стикера
+                await Task.Run(() => { pixels = WebPDecoder.Decode(bytes, out w, out h); });
+                if (pixels == null || w == 0 || h == 0) {
+                    Log("DecodeWebP: decode failed path=" + path);
                     return null;
                 }
-                try {
-                    // Копируем BGRA пиксели из нативной памяти
-                    int stride = width * 4;
-                    var pixelData = new byte[stride * height];
-                    System.Runtime.InteropServices.Marshal.Copy(ptr, pixelData, 0, pixelData.Length);
-
-                    // Конвертируем BGRA пиксели → PNG → BitmapImage
-                    var ras = new InMemoryRandomAccessStream();
-                    var enc = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
-                        Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, ras);
-                    enc.SetPixelData(
-                        Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
-                        Windows.Graphics.Imaging.BitmapAlphaMode.Straight,
-                        (uint)width, (uint)height, 96, 96, pixelData);
-                    await enc.FlushAsync();
-                    ras.Seek(0);
-                    var bmp = new BitmapImage();
-                    await bmp.SetSourceAsync(ras);
-                    return bmp;
-                } finally {
-                    WebPFree(ptr);
-                }
+                var ras = new InMemoryRandomAccessStream();
+                var enc = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
+                    Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, ras);
+                enc.SetPixelData(
+                    Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                    Windows.Graphics.Imaging.BitmapAlphaMode.Straight,
+                    (uint)w, (uint)h, 96, 96, pixels);
+                await enc.FlushAsync();
+                ras.Seek(0);
+                var bmp = new BitmapImage();
+                await bmp.SetSourceAsync(ras);
+                Log("DecodeWebP OK " + w + "x" + h + " path=" + path);
+                return bmp;
             } catch (Exception ex) {
                 Log("DecodeWebP ERR path=" + path + " | " + ex.Message);
                 return null;
