@@ -69,6 +69,14 @@ namespace TelegramWP10
         public string UnreadVisibility => _unreadCount > 0 ? "Visible" : "Collapsed";
         public string UnreadText => _unreadCount > 99 ? "99+" : _unreadCount.ToString();
 
+        private bool _isPinned = false;
+        public bool IsPinned
+        {
+            get => _isPinned;
+            set { _isPinned = value; OnPropertyChanged("IsPinned"); OnPropertyChanged("PinVisibility"); }
+        }
+        public string PinVisibility => _isPinned ? "Visible" : "Collapsed";
+
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string propertyName)
         {

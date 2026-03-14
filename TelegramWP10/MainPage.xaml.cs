@@ -390,19 +390,19 @@ namespace TelegramWP10
                     if (lastMsg != null) FillChatLastMessage(chatItem, lastMsg, c);
                     // Непрочитанные
                     chatItem.UnreadCount = c["unread_count"]?.ToObject<int>() ?? 0;
-                    // Закреплён ли чат — берём из positions нужного списка
+                    // _archiveChatIds заполняется ДО загрузки главного списка — надёжнее чем positions
+                    // (при bump positions уже содержит chatListMain вместо chatListArchive)
                     var positions = c["positions"] as JArray;
+                    bool isArchiveChat = _archiveChatIds.Contains(chatId) ||
+                        (positions != null && positions.Any(p => p["list"]?["@type"]?.ToString() == "chatListArchive"));
+                    bool isMainChat = !isArchiveChat;
+                    // Закреплён ли чат — берём из positions нужного списка
                     if (positions != null) {
                         string targetListType = isArchiveChat ? "chatListArchive" : "chatListMain";
                         var pos = positions.FirstOrDefault(p => p["list"]?["@type"]?.ToString() == targetListType
                                   || p["list"]?["@type"]?.ToString() == "chatListMain");
                         chatItem.IsPinned = pos?["is_pinned"]?.ToObject<bool>() ?? false;
                     }
-                    // _archiveChatIds заполняется ДО загрузки главного списка — надёжнее чем positions
-                    // (при bump positions уже содержит chatListMain вместо chatListArchive)
-                    bool isArchiveChat = _archiveChatIds.Contains(chatId) ||
-                        (positions != null && positions.Any(p => p["list"]?["@type"]?.ToString() == "chatListArchive"));
-                    bool isMainChat = !isArchiveChat;
 
                     // updateNewChat только обновляет _chatsDict.
                     // Добавление в видимый список — исключительно через LoadNextChat (100ms throttle).
