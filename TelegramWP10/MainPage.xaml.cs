@@ -1124,6 +1124,36 @@ namespace TelegramWP10
                     }
                 }
 
+                // Пересланное сообщение — извлекаем имя оригинального отправителя
+                var fwdInfo = msg["forward_info"];
+                if (fwdInfo != null) {
+                    var origin = fwdInfo["origin"];
+                    if (origin != null) {
+                        string oType = origin["@type"]?.ToString();
+                        if (oType == "messageOriginUser") {
+                            long oUid = origin["sender_user_id"]?.ToObject<long>() ?? 0;
+                            if (_usersDict.ContainsKey(oUid)) {
+                                var u = _usersDict[oUid];
+                                item.ForwardedFrom = (u["first_name"]?.ToString() + " " + u["last_name"]?.ToString()).Trim();
+                            } else {
+                                item.ForwardedFrom = "Пользователь";
+                            }
+                        } else if (oType == "messageOriginHiddenUser") {
+                            item.ForwardedFrom = origin["sender_name"]?.ToString() ?? "Скрытый пользователь";
+                        } else if (oType == "messageOriginChat") {
+                            long oCid = origin["sender_chat_id"]?.ToObject<long>() ?? 0;
+                            item.ForwardedFrom = _chatsDict.ContainsKey(oCid)
+                                ? _chatsDict[oCid].Title
+                                : origin["author_signature"]?.ToString() ?? "Чат";
+                        } else if (oType == "messageOriginChannel") {
+                            long oCid = origin["chat_id"]?.ToObject<long>() ?? 0;
+                            string sig = origin["author_signature"]?.ToString();
+                            string chanName = _chatsDict.ContainsKey(oCid) ? _chatsDict[oCid].Title : "Канал";
+                            item.ForwardedFrom = string.IsNullOrEmpty(sig) ? chanName : chanName + " (" + sig + ")";
+                        }
+                    }
+                }
+
                 // Реакции
                 var reactions = msg["interaction_info"]?["reactions"]?["reactions"] as JArray;
                 if (reactions != null && reactions.Count > 0)

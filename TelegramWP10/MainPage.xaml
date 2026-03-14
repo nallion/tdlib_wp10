@@ -215,6 +215,13 @@
                                            Visibility="{Binding SenderNameVisibility}"
                                            Margin="0,0,0,3"/>
 
+                                <!-- Переслано от -->
+                                <StackPanel Orientation="Horizontal" Visibility="{Binding ForwardedVisibility}" Margin="0,0,0,4">
+                                    <TextBlock Text="↪ " Foreground="#7EC8E3" FontSize="12"/>
+                                    <TextBlock Text="{Binding ForwardedFrom}" Foreground="#7EC8E3" FontSize="12"
+                                               FontStyle="Italic" TextTrimming="CharacterEllipsis" MaxWidth="220"/>
+                                </StackPanel>
+
                                 <!-- Цитата -->
                                 <Border Background="#44000000" BorderBrush="#88FFFFFF" BorderThickness="2,0,0,0" Margin="0,0,0,5" Padding="5,2" Visibility="{Binding ReplyVisibility}">
                                     <StackPanel>

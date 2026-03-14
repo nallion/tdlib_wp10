@@ -136,6 +136,14 @@ namespace TelegramWP10
         public Visibility SeparatorVisibility => IsSeparator ? Visibility.Visible : Visibility.Collapsed;
         public Visibility MessageVisibility => IsSeparator ? Visibility.Collapsed : Visibility.Visible;
 
+        // Пересланное сообщение — имя оригинального отправителя
+        private string _forwardedFrom = "";
+        public string ForwardedFrom {
+            get => _forwardedFrom;
+            set { _forwardedFrom = value; OnPropertyChanged("ForwardedFrom"); OnPropertyChanged("ForwardedVisibility"); }
+        }
+        public Visibility ForwardedVisibility => !string.IsNullOrEmpty(_forwardedFrom) ? Visibility.Visible : Visibility.Collapsed;
+
         public event PropertyChangedEventHandler PropertyChanged;
         public void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
