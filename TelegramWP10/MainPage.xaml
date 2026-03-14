@@ -201,7 +201,7 @@
                                 </StackPanel>
                             </Border>
                             <!-- Пузырь сообщения -->
-                            <Border Background="{Binding Background}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}"
+                            <Border Background="{Binding BubbleBackground}" Padding="8,5" Margin="0,4" CornerRadius="10" HorizontalAlignment="{Binding Alignment}"
                                     Visibility="{Binding MessageVisibility}"
                                     Holding="MessageBubble_Holding">
                             <FlyoutBase.AttachedFlyout>

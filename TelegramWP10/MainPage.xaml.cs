@@ -443,7 +443,8 @@ namespace TelegramWP10
                                 bool isImg = !string.IsNullOrEmpty(fpath) &&
                                     (fpath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
                                      fpath.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
-                                     fpath.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
+                                     fpath.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                     fpath.EndsWith(".webp", StringComparison.OrdinalIgnoreCase));
                                 if (isImg)
                                     { var t = UpdateMessagePhoto(mid, fpath); }
                                 // Если это полноразмерное фото для оверлея
@@ -1282,6 +1283,28 @@ namespace TelegramWP10
                         }
                     }
                     // Тумбнейл для GIF не нужен — MediaElement покажет сам файл
+                } else if (type == "messageSticker") {
+                    var sticker = content["sticker"];
+                    bool isAnimated = sticker?["is_animated"]?.ToObject<bool>() ?? false;
+                    bool isVideo = sticker?["is_video"]?.ToObject<bool>() ?? false;
+                    // Поддерживаем только статичные WebP стикеры
+                    if (!isAnimated && !isVideo) {
+                        item.IsSticker = true;
+                        item.Text = "";
+                        var stickerFile = sticker?["sticker"] as JObject;
+                        if (stickerFile != null) {
+                            long sfid = (long)stickerFile["id"];
+                            _fileToMsgId[sfid] = msgId;
+                            _messagesDict[msgId] = item;
+                            string sPath = stickerFile["local"]?["path"]?.ToString();
+                            Log("STICKER msg=" + msgId + " file_id=" + sfid + " path=" + sPath);
+                            if (!string.IsNullOrEmpty(sPath))
+                                { var t = UpdateMessagePhoto(msgId, sPath); }
+                            else
+                                TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + sfid + ",\"priority\":10,\"synchronous\":false}");
+                        }
+                    }
+                    // Анимированные/видео стикеры — пока заглушка (оставляем "😊 Стикер" из txt)
                 } else if (type == "messageDocument") {
                     var doc = content["document"];
                     var docFile = doc?["document"] as JObject;

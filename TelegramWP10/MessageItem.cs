@@ -130,6 +130,15 @@ namespace TelegramWP10
         // Дата сообщения для вычисления разделителей
         public DateTime RawDate { get; set; }
 
+        // Стикер — отображается без фона пузыря
+        private bool _isSticker = false;
+        public bool IsSticker {
+            get => _isSticker;
+            set { _isSticker = value; OnPropertyChanged("IsSticker"); OnPropertyChanged("BubbleBackground"); }
+        }
+        // Фон пузыря: прозрачный для стикеров, обычный для остальных
+        public string BubbleBackground => _isSticker ? "Transparent" : Background;
+
         // Разделитель дат между сообщениями разных дней
         public bool IsSeparator { get; set; } = false;
         public string SeparatorLabel { get; set; } = "";
