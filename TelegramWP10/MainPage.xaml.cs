@@ -1439,40 +1439,62 @@ namespace TelegramWP10
             } catch (Exception ex) { Log("UpdateMsgPhoto ERR msg=" + msgId + " | " + ex.Message); }
         }
 
-        // Вложенный класс — DLL загружается только при первом вызове Decode(),
-        // то есть только когда реально рендерится стикер
-        private static class WebPDecoder {
-            [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPDecodeBGRA",
-                CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
-            private static extern System.IntPtr WebPDecodeBGRA(
-                byte[] data, System.UIntPtr size, ref int width, ref int height);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern System.IntPtr LoadPackagedLibrary(string lpwLibFileName, uint reserved);
 
-            [System.Runtime.InteropServices.DllImport("libwebp.dll", EntryPoint = "WebPFree",
-                CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl)]
-            private static extern void WebPFree(System.IntPtr ptr);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern System.IntPtr GetProcAddress(System.IntPtr hModule, string lpProcName);
 
-            // Возвращает BGRA пиксели или null при ошибке
-            public static byte[] Decode(byte[] data, out int width, out int height) {
-                width = 0; height = 0;
-                var ptr = WebPDecodeBGRA(data, (System.UIntPtr)data.Length, ref width, ref height);
-                if (ptr == System.IntPtr.Zero) return null;
-                try {
-                    var pixels = new byte[width * height * 4];
-                    System.Runtime.InteropServices.Marshal.Copy(ptr, pixels, 0, pixels.Length);
-                    return pixels;
-                } finally {
-                    WebPFree(ptr);
+        private delegate System.IntPtr WebPDecodeBGRADelegate(
+            byte[] data, System.UIntPtr size, ref int width, ref int height);
+        private delegate void WebPFreeDelegate(System.IntPtr ptr);
+
+        private System.IntPtr _libWebP = System.IntPtr.Zero;
+        private WebPDecodeBGRADelegate _webPDecodeBGRA = null;
+        private WebPFreeDelegate _webPFree = null;
+        private bool _libWebPTried = false;
+
+        private bool EnsureLibWebP() {
+            if (_libWebPTried) return _webPDecodeBGRA != null;
+            _libWebPTried = true;
+            try {
+                _libWebP = LoadPackagedLibrary("libwebp.dll", 0);
+                if (_libWebP == System.IntPtr.Zero) {
+                    Log("EnsureLibWebP: LoadPackagedLibrary failed err=" + System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                    return false;
                 }
+                var pDecode = GetProcAddress(_libWebP, "WebPDecodeBGRA");
+                var pFree   = GetProcAddress(_libWebP, "WebPFree");
+                if (pDecode == System.IntPtr.Zero || pFree == System.IntPtr.Zero) {
+                    Log("EnsureLibWebP: GetProcAddress failed");
+                    return false;
+                }
+                _webPDecodeBGRA = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<WebPDecodeBGRADelegate>(pDecode);
+                _webPFree       = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<WebPFreeDelegate>(pFree);
+                Log("EnsureLibWebP: OK");
+                return true;
+            } catch (Exception ex) {
+                Log("EnsureLibWebP ERR: " + ex.Message);
+                return false;
             }
         }
 
         private async Task<BitmapImage> DecodeWebPAsync(string path) {
             try {
+                if (!EnsureLibWebP()) return null;
                 var bytes = await Task.Run(() => System.IO.File.ReadAllBytes(path));
                 int w = 0, h = 0;
                 byte[] pixels = null;
-                // libwebp.dll загружается здесь — только при рендере стикера
-                await Task.Run(() => { pixels = WebPDecoder.Decode(bytes, out w, out h); });
+                await Task.Run(() => {
+                    var ptr = _webPDecodeBGRA(bytes, (System.UIntPtr)bytes.Length, ref w, ref h);
+                    if (ptr == System.IntPtr.Zero) return;
+                    try {
+                        pixels = new byte[w * h * 4];
+                        System.Runtime.InteropServices.Marshal.Copy(ptr, pixels, 0, pixels.Length);
+                    } finally {
+                        _webPFree(ptr);
+                    }
+                });
                 if (pixels == null || w == 0 || h == 0) {
                     Log("DecodeWebP: decode failed path=" + path);
                     return null;
@@ -1488,7 +1510,7 @@ namespace TelegramWP10
                 ras.Seek(0);
                 var bmp = new BitmapImage();
                 await bmp.SetSourceAsync(ras);
-                Log("DecodeWebP OK " + w + "x" + h + " path=" + path);
+                Log("DecodeWebP OK " + w + "x" + h);
                 return bmp;
             } catch (Exception ex) {
                 Log("DecodeWebP ERR path=" + path + " | " + ex.Message);
