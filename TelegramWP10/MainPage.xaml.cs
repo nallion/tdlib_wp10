@@ -1317,10 +1317,13 @@ namespace TelegramWP10
                                 _remoteUniqueIdToMsgId[remoteUid] = msgId;
                             _messagesDict[msgId] = item;
                             string sPath = stickerFile["local"]?["path"]?.ToString();
-                            Log("STICKER msg=" + msgId + " file_id=" + sfid + " remote_uid=" + remoteUid + " path=" + sPath);
+                            Log("STICKER msg=" + msgId + " file_id=" + sfid + " remote_uid=" + remoteUid + " path=" + sPath + " pathIsNull=" + (sPath == null) + " pathEmpty=" + (sPath == ""));
                             if (!string.IsNullOrEmpty(sPath)) {
                                 Log("STICKER calling UpdateMessagePhoto msg=" + msgId);
-                                { var t = UpdateMessagePhoto(msgId, sPath); }
+                                var stickerTask = UpdateMessagePhoto(msgId, sPath);
+                                stickerTask.ContinueWith(t => {
+                                    if (t.IsFaulted) Log("STICKER UpdateMsgPhoto FAULT: " + t.Exception?.InnerException?.Message);
+                                });
                             }
                             else
                                 TdJson.SendUtf8(_client, "{\"@type\":\"downloadFile\",\"file_id\":" + sfid + ",\"priority\":10,\"synchronous\":false}");
