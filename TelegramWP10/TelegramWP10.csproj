@@ -79,9 +79,7 @@
     <Content Include="libeay32.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="zlib1.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <None Include="zlib1.dll" />
   </ItemGroup>
 
   <ItemGroup>
@@ -114,13 +112,6 @@
           Command="SignTool.exe sign /fd SHA256 /a /f &quot;$(CertFile)&quot; /p $(CertPass) &quot;$(AppxPath)&quot;" />
     
     <Message Importance="High" Text="--- ПОДПИСЬ ЗАВЕРШЕНА: $(AppxPath) ---" />
-  </Target>
-  <!-- Убираем zlib1.dll из SkiaSharp NativeAssets — у нас уже есть своя от TDLib -->
-  <Target Name="RemoveDuplicateZlib" AfterTargets="ResolveAssemblyReferences">
-    <ItemGroup>
-      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
-        Condition="'%(Filename)%(Extension)' == 'zlib1.dll' AND '%(ReferenceCopyLocalPaths.MSBuildSourceProjectFile)' != ''" />
-    </ItemGroup>
   </Target>
 
 </Project>
