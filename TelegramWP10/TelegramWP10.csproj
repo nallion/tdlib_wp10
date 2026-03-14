@@ -101,6 +101,10 @@
     </Page>
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Properties\Default.rd.xml" />
+  </ItemGroup>
+
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
 
   <Target Name="AutoSignAppx" AfterTargets="_BundleAppx;GenerateAppx">
