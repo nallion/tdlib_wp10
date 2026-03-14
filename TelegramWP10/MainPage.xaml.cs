@@ -1439,9 +1439,9 @@ namespace TelegramWP10
             } catch (Exception ex) { Log("UpdateMsgPhoto ERR msg=" + msgId + " | " + ex.Message); }
         }
 
-        // Ленивая загрузка libwebp через LoadLibrary — не вылетаем если DLL отсутствует
+        // UWP sandbox не позволяет LoadLibrary — используем LoadPackagedLibrary
         [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-        private static extern System.IntPtr LoadLibrary(string lpFileName);
+        private static extern System.IntPtr LoadPackagedLibrary(string lpwLibFileName, uint reserved);
 
         [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
         private static extern System.IntPtr GetProcAddress(System.IntPtr hModule, string lpProcName);
@@ -1463,7 +1463,7 @@ namespace TelegramWP10
             if (_libWebPLoaded) return _libWebP != System.IntPtr.Zero;
             _libWebPLoaded = true;
             try {
-                _libWebP = LoadLibrary("libwebp.dll");
+                _libWebP = LoadPackagedLibrary("libwebp.dll", 0);
                 if (_libWebP == System.IntPtr.Zero) {
                     Log("LoadLibWebP: LoadLibrary failed err=" + System.Runtime.InteropServices.Marshal.GetLastWin32Error());
                     return false;
