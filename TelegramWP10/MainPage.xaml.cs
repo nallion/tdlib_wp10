@@ -1316,9 +1316,9 @@ namespace TelegramWP10
                             if (!string.IsNullOrEmpty(remoteUid))
                                 _remoteUniqueIdToMsgId[remoteUid] = msgId;
                             _messagesDict[msgId] = item;
-                            string sPath = stickerFile["local"]?["path"]?.ToString();
-                            Log("STICKER msg=" + msgId + " file_id=" + sfid + " remote_uid=" + remoteUid + " path=" + sPath + " pathIsNull=" + (sPath == null) + " pathEmpty=" + (sPath == ""));
-                            if (!string.IsNullOrEmpty(sPath)) {
+                            string sPath = stickerFile["local"]?["path"]?.ToString()?.Trim();
+                            Log("STICKER msg=" + msgId + " file_id=" + sfid + " remote_uid=" + remoteUid + " path='" + sPath + "' len=" + (sPath?.Length ?? -1));
+                            if (!string.IsNullOrWhiteSpace(sPath)) {
                                 Log("STICKER calling UpdateMessagePhoto msg=" + msgId);
                                 var stickerTask = UpdateMessagePhoto(msgId, sPath);
                                 stickerTask.ContinueWith(t => {
