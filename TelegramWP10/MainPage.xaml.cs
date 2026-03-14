@@ -21,6 +21,7 @@ namespace TelegramWP10
         private Dictionary<long, JToken> _usersDict = new Dictionary<long, JToken>(); // userId → user object
         private Dictionary<long, long> _fileToChatId = new Dictionary<long, long>();
         private Dictionary<long, long> _fileToMsgId = new Dictionary<long, long>();
+        private Dictionary<string, long> _remoteUniqueIdToMsgId = new Dictionary<string, long>(); // remote.unique_id → msgId
         private Dictionary<long, long> _videoFileIds = new Dictionary<long, long>(); // file_id → msgId только для видеофайлов
         private Dictionary<long, MessageItem> _messagesDict = new Dictionary<long, MessageItem>();
         // replyMsgId → MessageItem которому нужно заполнить ReplyToText
@@ -437,6 +438,20 @@ namespace TelegramWP10
                         if (fid != 0) {
                             if (_fileToChatId.ContainsKey(fid) && !string.IsNullOrEmpty(fpath))
                                 { var t = UpdateAvatar(_fileToChatId[fid], fpath); }
+
+                            // Фолбэк для стикеров: TDLib может вернуть новый file_id при скачивании.
+                            // Если file_id не найден — ищем по remote.unique_id
+                            if (!_fileToMsgId.ContainsKey(fid) && isCompleted && !string.IsNullOrEmpty(fpath)
+                                && fpath.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)) {
+                                string remoteUid = fileObj["remote"]?["unique_id"]?.ToString();
+                                if (!string.IsNullOrEmpty(remoteUid) && _remoteUniqueIdToMsgId.ContainsKey(remoteUid)) {
+                                    long mid2 = _remoteUniqueIdToMsgId[remoteUid];
+                                    _fileToMsgId[fid] = mid2; // регистрируем новый id
+                                    Log("STICKER fallback remote_uid=" + remoteUid + " -> msg=" + mid2 + " new_fid=" + fid);
+                                    var t2 = UpdateMessagePhoto(mid2, fpath);
+                                }
+                            }
+
                             if (_fileToMsgId.ContainsKey(fid)) {
                                 long mid = _fileToMsgId[fid];
                                 // Передаём в UpdateMessagePhoto только изображения, не .mp4
@@ -1295,9 +1310,13 @@ namespace TelegramWP10
                         if (stickerFile != null) {
                             long sfid = (long)stickerFile["id"];
                             _fileToMsgId[sfid] = msgId;
+                            // TDLib может сменить file_id при скачивании — регистрируем remote.unique_id
+                            string remoteUid = stickerFile["remote"]?["unique_id"]?.ToString();
+                            if (!string.IsNullOrEmpty(remoteUid))
+                                _remoteUniqueIdToMsgId[remoteUid] = msgId;
                             _messagesDict[msgId] = item;
                             string sPath = stickerFile["local"]?["path"]?.ToString();
-                            Log("STICKER msg=" + msgId + " file_id=" + sfid + " path=" + sPath);
+                            Log("STICKER msg=" + msgId + " file_id=" + sfid + " remote_uid=" + remoteUid + " path=" + sPath);
                             if (!string.IsNullOrEmpty(sPath))
                                 { var t = UpdateMessagePhoto(msgId, sPath); }
                             else
@@ -1428,6 +1447,7 @@ namespace TelegramWP10
             _fileToMsgId.Clear();
             _videoFileIds.Clear();
             _replyRequests.Clear();
+            _remoteUniqueIdToMsgId.Clear();
             _editingMessageId = 0;
             _replyToMessageId = 0;
             ReplyPreviewPanel.Visibility = Visibility.Collapsed;
