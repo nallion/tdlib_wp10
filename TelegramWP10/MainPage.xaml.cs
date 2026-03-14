@@ -1463,23 +1463,29 @@ namespace TelegramWP10
             if (_libWebPTried) return _webPDecodeBGRA != null;
             _libWebPTried = true;
             try {
+                Log("EnsureLibWebP: step 1 LoadPackagedLibrary");
                 _libWebP = LoadPackagedLibrary("libwebp.dll", 0);
+                Log("EnsureLibWebP: step 2 handle=" + _libWebP);
                 if (_libWebP == System.IntPtr.Zero) {
                     Log("EnsureLibWebP: LoadPackagedLibrary failed err=" + System.Runtime.InteropServices.Marshal.GetLastWin32Error());
                     return false;
                 }
+                Log("EnsureLibWebP: step 3 GetProcAddress WebPDecodeBGRA");
                 var pDecode = GetProcAddress(_libWebP, "WebPDecodeBGRA");
-                var pFree   = GetProcAddress(_libWebP, "WebPFree");
+                Log("EnsureLibWebP: step 4 pDecode=" + pDecode);
+                var pFree = GetProcAddress(_libWebP, "WebPFree");
+                Log("EnsureLibWebP: step 5 pFree=" + pFree);
                 if (pDecode == System.IntPtr.Zero || pFree == System.IntPtr.Zero) {
                     Log("EnsureLibWebP: GetProcAddress failed");
                     return false;
                 }
+                Log("EnsureLibWebP: step 6 GetDelegateForFunctionPointer");
                 _webPDecodeBGRA = (WebPDecodeBGRADelegate)System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer(pDecode, typeof(WebPDecodeBGRADelegate));
                 _webPFree       = (WebPFreeDelegate)System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer(pFree, typeof(WebPFreeDelegate));
                 Log("EnsureLibWebP: OK");
                 return true;
             } catch (Exception ex) {
-                Log("EnsureLibWebP ERR: " + ex.Message);
+                Log("EnsureLibWebP ERR: " + ex.GetType().Name + " | " + ex.Message);
                 return false;
             }
         }
